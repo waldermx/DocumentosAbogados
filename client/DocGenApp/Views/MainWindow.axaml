@@ -65,79 +65,99 @@
         </StackPanel>
       </Border>
 
-      <!-- Datos del abogado: locales al equipo. Puede haber varios; el seleccionado
-           en el combo es el que se aplica a los documentos que se generen. -->
+      <!-- Datos de los abogados: locales al equipo. TODOS los de la lista se aplican
+           a cada documento, cada uno con sus propios marcadores numerados
+           ({{abogado1Nombre}}, {{abogado2Nombre}}, ...) — para plantillas con más
+           de un firmante. No hay "seleccionar uno". -->
       <Expander IsExpanded="{Binding AbogadoExpandido, Mode=TwoWay}"
                 HorizontalAlignment="Stretch">
         <Expander.Header>
           <StackPanel Spacing="1">
-            <TextBlock Classes="etiqueta" Text="DATOS DEL ABOGADO" />
+            <TextBlock Classes="etiqueta" Text="DATOS DE LOS ABOGADOS" />
             <TextBlock Classes="subtitulo" Text="{Binding ResumenAbogado}" />
           </StackPanel>
         </Expander.Header>
 
         <StackPanel Spacing="12" Margin="0,6,0,0">
 
-          <!-- Selector: qué abogado firma los próximos documentos -->
-          <Grid ColumnDefinitions="*,Auto,Auto">
-            <ComboBox Grid.Column="0"
-                      HorizontalAlignment="Stretch"
-                      ItemsSource="{Binding Abogados}"
-                      SelectedItem="{Binding AbogadoSeleccionado, Mode=TwoWay}"
-                      PlaceholderText="Ningún abogado capturado todavía">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="models:DatosAbogado">
-                  <TextBlock Text="{Binding EtiquetaCorta}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
+          <ItemsControl ItemsSource="{Binding AbogadosParaMostrar}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:AbogadoItemViewModel">
+                <Border Classes="panel" Padding="14,12" Margin="0,0,0,10">
+                  <StackPanel Spacing="10">
 
-            <Button Grid.Column="1"
-                    Margin="8,0,0,0"
-                    Content="+ Agregar abogado"
-                    Command="{Binding AgregarAbogadoCommand}" />
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                      <TextBlock Grid.Column="0"
+                                 Classes="etiqueta"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Etiqueta}" />
+                      <Button Grid.Column="1"
+                              Padding="8,3"
+                              FontSize="12"
+                              Content="↑"
+                              ToolTip.Tip="Subir (cambia su número de marcador)"
+                              Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).MoverAbogadoArribaCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="2"
+                              Margin="4,0,0,0"
+                              Padding="8,3"
+                              FontSize="12"
+                              Content="↓"
+                              ToolTip.Tip="Bajar (cambia su número de marcador)"
+                              Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).MoverAbogadoAbajoCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="3"
+                              Margin="4,0,0,0"
+                              Padding="8,3"
+                              FontSize="12"
+                              Content="Eliminar"
+                              Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).EliminarAbogadoCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
 
-            <Button Grid.Column="2"
-                    Margin="8,0,0,0"
-                    Content="Eliminar"
-                    Command="{Binding EliminarAbogadoCommand}"
-                    IsEnabled="{Binding HayAbogadoSeleccionado}" />
-          </Grid>
+                    <Grid ColumnDefinitions="*,12,*,12,*">
+                      <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Classes="etiqueta" Text="NOMBRE" />
+                        <TextBox Watermark="Nombre completo"
+                                 Text="{Binding Datos.Nombre, Mode=TwoWay}" />
+                        <TextBlock Classes="subtitulo"
+                                   FontFamily="Consolas,Menlo,monospace"
+                                   Text="{Binding MarcadorNombre}" />
+                      </StackPanel>
 
-          <!-- Formulario del abogado activo -->
-          <Grid ColumnDefinitions="*,12,*,12,*"
-                IsEnabled="{Binding HayAbogadoSeleccionado}">
-            <StackPanel Grid.Column="0" Spacing="4">
-              <TextBlock Classes="etiqueta" Text="NOMBRE" />
-              <TextBox Watermark="Nombre completo"
-                       Text="{Binding AbogadoSeleccionado.Nombre, Mode=TwoWay}" />
-              <TextBlock Classes="subtitulo"
-                         FontFamily="Consolas,Menlo,monospace"
-                         Text="{}{{abogadoNombre}}" />
-            </StackPanel>
+                      <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock Classes="etiqueta" Text="USUARIO FIREL" />
+                        <TextBox Watermark="Usuario FIREL"
+                                 Text="{Binding Datos.UsuarioFirel, Mode=TwoWay}" />
+                        <TextBlock Classes="subtitulo"
+                                   FontFamily="Consolas,Menlo,monospace"
+                                   Text="{Binding MarcadorFirel}" />
+                      </StackPanel>
 
-            <StackPanel Grid.Column="2" Spacing="4">
-              <TextBlock Classes="etiqueta" Text="USUARIO FIREL" />
-              <TextBox Watermark="Usuario FIREL"
-                       Text="{Binding AbogadoSeleccionado.UsuarioFirel, Mode=TwoWay}" />
-              <TextBlock Classes="subtitulo"
-                         FontFamily="Consolas,Menlo,monospace"
-                         Text="{}{{abogadoFirel}}" />
-            </StackPanel>
+                      <StackPanel Grid.Column="4" Spacing="4">
+                        <TextBlock Classes="etiqueta" Text="CÉDULA PROFESIONAL" />
+                        <TextBox Watermark="Número de cédula"
+                                 Text="{Binding Datos.CedulaProfesional, Mode=TwoWay}" />
+                        <TextBlock Classes="subtitulo"
+                                   FontFamily="Consolas,Menlo,monospace"
+                                   Text="{Binding MarcadorCedula}" />
+                      </StackPanel>
+                    </Grid>
 
-            <StackPanel Grid.Column="4" Spacing="4">
-              <TextBlock Classes="etiqueta" Text="CÉDULA PROFESIONAL" />
-              <TextBox Watermark="Número de cédula"
-                       Text="{Binding AbogadoSeleccionado.CedulaProfesional, Mode=TwoWay}" />
-              <TextBlock Classes="subtitulo"
-                         FontFamily="Consolas,Menlo,monospace"
-                         Text="{}{{abogadoCedula}}" />
-            </StackPanel>
-          </Grid>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="subtitulo"
+                     FontStyle="Italic"
+                     Text="No hay ningún abogado capturado todavía."
+                     IsVisible="{Binding !HayAlgunAbogado}" />
 
           <StackPanel Orientation="Horizontal" Spacing="12">
-            <Button Content="Guardar datos"
-                    Command="{Binding GuardarAbogadosCommand}" />
+            <Button Content="+ Agregar abogado" Command="{Binding AgregarAbogadoCommand}" />
+            <Button Content="Guardar datos" Command="{Binding GuardarAbogadosCommand}" />
             <TextBlock Classes="subtitulo"
                        VerticalAlignment="Center"
                        Text="{Binding MensajeAbogado}"
@@ -146,7 +166,7 @@
 
           <TextBlock Classes="subtitulo"
                      TextWrapping="Wrap"
-                     Text="Se guardan solo en este equipo. Los documentos que generes — uno o en lote — usan el abogado seleccionado arriba." />
+                     Text="Se guardan solo en este equipo. Todos aplican a cada documento generado: el primero también llena {{abogadoNombre}} sin numerar, para plantillas de un solo firmante." />
         </StackPanel>
       </Expander>
 
@@ -163,9 +183,25 @@
       <Border Classes="banner"
               Background="{DynamicResource ExitoFondo}"
               IsVisible="{Binding MensajeExito, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-        <TextBlock Foreground="{DynamicResource Exito}"
-                   TextWrapping="Wrap"
-                   Text="{Binding MensajeExito}" />
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBlock Grid.Column="0"
+                     Foreground="{DynamicResource Exito}"
+                     TextWrapping="Wrap"
+                     VerticalAlignment="Center"
+                     Text="{Binding MensajeExito}" />
+
+          <Button Grid.Column="1"
+                  Margin="10,0,0,0"
+                  Content="Ver documento"
+                  Command="{Binding AbrirUltimoDocumentoCommand}"
+                  IsVisible="{Binding HayDocumentoParaAbrir}" />
+
+          <Button Grid.Column="2"
+                  Margin="10,0,0,0"
+                  Content="Abrir carpeta"
+                  Command="{Binding AbrirCarpetaGeneradaCommand}"
+                  IsVisible="{Binding HayCarpetaParaAbrir}" />
+        </Grid>
       </Border>
 
     </StackPanel>

@@ -32,6 +32,7 @@ public partial class App : Application
             // La vista provee los diálogos; el ViewModel no conoce la UI.
             viewModel.PedirRutaDeGuardado = ventana.PedirRutaDeGuardadoAsync;
             viewModel.PedirCarpetaDeSalida = ventana.PedirCarpetaDeSalidaAsync;
+            viewModel.AbrirEnElSistema = ventana.AbrirEnElSistema;
 
             desktop.MainWindow = ventana;
             desktop.Exit += (_, _) => api.Dispose();

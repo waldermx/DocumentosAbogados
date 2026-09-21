@@ -20,7 +20,7 @@ El cliente nunca ve credenciales de Google: solo conoce la URL del servidor y la
 
 ```bash
 dotnet build          # compila los 4 proyectos
-dotnet test           # 62 tests
+dotnet test           # 74 tests
 ```
 
 ### Servidor
@@ -67,8 +67,9 @@ La service account necesita permiso de **lectura** sobre la hoja: compártela co
 `Parsing:Regexes` es una **lista**: se prueban en orden contra cada celda y gana el primero que coincida. Por defecto:
 
 ```
-1) ^(?<consecutivo>\d+/\d{4})\s+(?<colegio>.+?)\s+DEL\s+(?<circuito>.+)$
-2) ^(?<consecutivo>\d+/\d{4})\s+(?<colegio>.+)$
+1) ^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+?)\s+DEL\s+(?<circuito>.+)$
+2) ^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+)$
+3) ^(?<colegio>.+?)\s+(?<consecutivo>\d+/\d{2,4})$
 ```
 
 El primero es el formato canónico. Sobre `644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO` extrae:
@@ -79,9 +80,14 @@ El primero es el formato canónico. Sobre `644/2026 TERCER COLEGIADO DEL DECIMOP
 | `colegio` | `TERCER COLEGIADO` |
 | `circuito` | `DECIMOPRIMER CIRCUITO` |
 
-El segundo es el de respaldo y existe porque **no todas las filas terminan en `DEL <circuito>`**: algunas no llevan nada detrás del colegio y otras llevan otra cosa. Sobre `777/2026 SEGUNDO TRIBUNAL UNITARIO` extrae `consecutivo` = `777/2026` y `colegio` = `SEGUNDO TRIBUNAL UNITARIO`, sin `circuito`. Antes esas filas caían en «errores de parseo» y no se podían seleccionar; ahora son registros normales. El marcador `{{circuito}}` que quede sin valor se deja visible en el documento y se avisa en la app, como cualquier otro campo faltante.
+Los tres patrones toleran, en cualquier combinación:
 
-Cada registro expone `patronUsado` (índice 0-based) para ver de un vistazo qué filas cayeron en el patrón laxo. Si aparece una variante nueva, se añade un patrón más a la lista **antes** del de respaldo: es configuración, no código.
+- **Año de 2 o 4 dígitos** en el consecutivo (`21` o `2026`) — `\d{2,4}`, no `\d{4}` fijo.
+- **Sin `DEL <circuito>` al final** (patrón 2): no todas las filas lo llevan. Sobre `777/2026 SEGUNDO TRIBUNAL UNITARIO` extrae `consecutivo` = `777/2026` y `colegio` = `SEGUNDO TRIBUNAL UNITARIO`, sin `circuito`. El marcador `{{circuito}}` sin valor se deja visible en el documento y se avisa en la app, como cualquier otro campo faltante.
+- **Una o más palabras antes del consecutivo** (patrones 1 y 2): `REVISIÓN 1/2022 SEXTO COLEGIADO` → `consecutivo` = `1/2022`, `colegio` = `SEXTO COLEGIADO`. La(s) palabra(s) delante no se capturan ni aparecen en ningún marcador.
+- **El consecutivo al final en vez de al principio** (patrón 3, el último recurso): `Primer Colegiado 33/2022` → `colegio` = `Primer Colegiado`, `consecutivo` = `33/2022`.
+
+Cada registro expone `patronUsado` (índice 0-based) para ver de un vistazo qué filas cayeron en cuál. `GET /diagnostico` (ver más abajo) también reporta `filasPorPatron`. Si aparece una variante nueva que ninguno de los tres cubre, se añade un patrón más a la lista, del más específico al más laxo: es configuración, no código.
 
 **Los nombres de los grupos son libres**: cada grupo con nombre se convierte automáticamente en un marcador `{{nombre}}` disponible en la plantilla. Una fila que no coincide con **ningún** patrón sigue sin interrumpir la sincronización: se lista aparte en la app.
 
@@ -140,7 +146,8 @@ Los logs reportan `Filas reparseadas` / `reutilizadas` en cada sync, que es la f
 |---|---|
 | `{{consecutivo}}`, `{{colegio}}`, `{{circuito}}` | Los grupos del regex (o los que definas) |
 | `{{nombre}}` | La columna extra configurada (o las que definas) |
-| `{{abogadoNombre}}`, `{{abogadoFirel}}`, `{{abogadoCedula}}` | Datos del abogado, capturados en la app |
+| `{{abogadoNombre}}`, `{{abogadoFirel}}`, `{{abogadoCedula}}` | El **primer** abogado capturado en la app |
+| `{{abogado1Nombre}}`, `{{abogado2Nombre}}`, ... | Cada abogado capturado, numerado por su posición en la lista — ver [Datos de los abogados](#datos-de-los-abogados) |
 | `{{valorCrudo}}` | El texto original de la celda |
 | `{{fila}}` | Número de fila en la hoja |
 | `{{fecha}}` | Fecha de generación, `dd/MM/yyyy` |
@@ -166,15 +173,25 @@ dotnet run --project client/DocGenApp -- --crear-plantilla
 | `TemplatePath` | Ruta a la plantilla; relativa al directorio de la app. |
 | `TimeoutSeconds` | Timeout de las llamadas HTTP. |
 
-### Datos del abogado
+### Datos de los abogados
 
 Nombre, usuario FIREL y cédula profesional **no vienen de la hoja**: se capturan en la app y se guardan en `%LOCALAPPDATA%\DocGenApp\abogados.json`.
 
-Se puede dar de alta **más de un abogado** (un despacho con varios). El panel «Datos del abogado» tiene un selector: «+ Agregar abogado» crea uno nuevo y lo deja activo para editarlo, «Eliminar» borra el que está activo. El abogado **seleccionado en el selector** es el que se usa al generar documentos, tanto uno solo como en el lote masivo — no hay forma de mezclar dos abogados en una misma generación. Qué abogado estaba activo se recuerda entre arranques.
+Se puede dar de alta **más de un abogado** (un despacho con varios, o un documento firmado por dos). No hay "seleccionar uno": **todos los abogados de la lista se aplican a cada documento generado**, cada uno con sus propios marcadores según su posición:
 
-Van en claro a propósito: son datos identificativos, no credenciales — la password maestra sigue siendo lo único cifrado con DPAPI. Si no hay ningún abogado seleccionado (o falta algún campo), el documento se genera igual y los marcadores `{{abogadoNombre}}`, `{{abogadoFirel}}`, `{{abogadoCedula}}` quedan visibles, como cualquier otro campo sin valor.
+| Posición | Marcadores |
+|---|---|
+| 1º | `{{abogado1Nombre}}`, `{{abogado1Firel}}`, `{{abogado1Cedula}}` — y también `{{abogadoNombre}}`, `{{abogadoFirel}}`, `{{abogadoCedula}}` sin numerar |
+| 2º | `{{abogado2Nombre}}`, `{{abogado2Firel}}`, `{{abogado2Cedula}}` |
+| 3º, 4º... | Igual, con su número |
 
-El archivo de una sola versión anterior a este cambio (`abogado.json`, un único abogado) se migra automáticamente la primera vez que arranca la app nueva: se envuelve en una lista de un elemento y queda seleccionado. El archivo viejo no se borra.
+El panel «Datos de los abogados» lista una tarjeta por abogado con esos marcadores impresos al lado de cada campo, igual que hace el panel de detalle con los campos de la hoja. «+ Agregar abogado» añade una tarjeta vacía al final; «Eliminar» quita esa tarjeta; las flechas ↑↓ reordenan — **el orden decide el número**, así que subir un abogado lo convierte en `abogado1` y baja de puesto al que estaba ahí.
+
+Una plantilla con un solo firmante no necesita cambiar nada: el primer abogado de la lista sigue llenando los marcadores sin numerar de siempre. Una plantilla con dos o más firmantes usa los numerados.
+
+Van en claro a propósito: son datos identificativos, no credenciales — la password maestra sigue siendo lo único cifrado con DPAPI. Si un marcador no tiene abogado correspondiente (p. ej. `{{abogado2Nombre}}` con solo un abogado capturado), el documento se genera igual y el marcador queda visible, como cualquier otro campo sin valor.
+
+El archivo de una versión anterior a este cambio (`abogado.json`, un único abogado sin lista) se migra automáticamente la primera vez que arranca la app nueva: se envuelve en una lista de un elemento. El archivo viejo no se borra.
 
 ### Generación masiva
 
@@ -186,6 +203,15 @@ La lista de registros tiene una casilla por fila y una casilla **«Seleccionar t
 - Si dos registros comparten consecutivo, al segundo se le añade `-fila<N>` en vez de sobrescribir al primero en silencio.
 - Un fallo en una fila **no aborta el lote**: al final se informa de cuántos se generaron, cuántos fallaron y qué marcadores quedaron sin valor en alguno.
 - La generación corre fuera del hilo de UI, así que la ventana no se congela con lotes grandes.
+
+### Ver el documento generado
+
+El banner verde que aparece tras generar trae un botón contextual junto al mensaje:
+
+- Al generar **un solo documento**: «Ver documento» lo abre con la app asociada de Windows (Word, o la que corresponda), igual que hacer doble clic en el archivo.
+- Al generar **en lote**: «Abrir carpeta» abre en el Explorador la carpeta donde cayeron todos los `.docx`.
+
+Si el archivo no se puede abrir (se movió, no hay ninguna app asociada), el aviso aparece en la barra de estado sin tocar el mensaje de éxito, que sigue siendo válido — el documento ya se generó.
 
 ### Modo sin conexión
 

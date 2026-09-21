@@ -80,8 +80,14 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
         Nombre.Contains(termino, StringComparison.OrdinalIgnoreCase) ||
         Fila.ToString().Contains(termino, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Diccionario que consume <see cref="Services.WordDocumentGenerator"/>.</summary>
-    public Dictionary<string, string> ValoresParaPlantilla(DatosAbogado abogado)
+    /// <summary>
+    /// Diccionario que consume <see cref="Services.WordDocumentGenerator"/>. Los abogados
+    /// son locales y los mismos para todos los registros: cada uno de la lista aporta sus
+    /// marcadores numerados según su posición (<c>{{abogado1Nombre}}</c>,
+    /// <c>{{abogado2Nombre}}</c>, ...), y el primero también los sin numerar
+    /// (<c>{{abogadoNombre}}</c>) para que una plantilla de un solo firmante siga sirviendo.
+    /// </summary>
+    public Dictionary<string, string> ValoresParaPlantilla(IReadOnlyList<DatosAbogado> abogados)
     {
         var valores = new Dictionary<string, string>(Registro.Campos.Grupos, StringComparer.OrdinalIgnoreCase)
         {
@@ -90,10 +96,20 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
             ["fecha"] = DateTime.Now.ToString("dd/MM/yyyy")
         };
 
-        // Los datos del abogado son locales y los mismos para todos los registros.
-        foreach (var (clave, valor) in abogado.ValoresParaPlantilla())
+        for (var i = 0; i < abogados.Count; i++)
         {
-            valores[clave] = valor;
+            foreach (var (clave, valor) in abogados[i].ValoresParaPlantilla(i + 1))
+            {
+                valores[clave] = valor;
+            }
+
+            if (i == 0)
+            {
+                foreach (var (clave, valor) in abogados[i].ValoresParaPlantilla())
+                {
+                    valores[clave] = valor;
+                }
+            }
         }
 
         return valores;

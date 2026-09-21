@@ -37,6 +37,9 @@ public sealed partial class MainViewModel : ViewModelBase
     /// <summary>Ídem para el diálogo de carpeta, que usa la generación masiva.</summary>
     public Func<Task<string?>>? PedirCarpetaDeSalida { get; set; }
 
+    /// <summary>Lo inyecta la vista: abre un archivo o carpeta con la app asociada del sistema.</summary>
+    public Action<string>? AbrirEnElSistema { get; set; }
+
     public MainViewModel(
         ApiClient api,
         LocalCacheService cacheLocal,
@@ -54,10 +57,13 @@ public sealed partial class MainViewModel : ViewModelBase
 
         var persistido = _abogadoStore.Cargar();
         _abogados = new ObservableCollection<DatosAbogado>(persistido.Abogados);
-        _abogadoSeleccionado = persistido.SeleccionadoId is { } id
-            ? _abogados.FirstOrDefault(a => a.Id == id) ?? _abogados.FirstOrDefault()
-            : _abogados.FirstOrDefault();
-        _abogadoExpandido = _abogadoSeleccionado is null || !_abogadoSeleccionado.EstaCompleto;
+        foreach (var abogado in _abogados)
+        {
+            abogado.PropertyChanged += AlCambiarUnAbogado;
+        }
+
+        _abogadosParaMostrar = ConstruirVistaDeAbogados();
+        _abogadoExpandido = _abogados.Count == 0 || _abogados.Any(a => !a.EstaCompleto);
     }
 
     [ObservableProperty]
@@ -100,19 +106,19 @@ public sealed partial class MainViewModel : ViewModelBase
 
     partial void OnEstadoChanged(EstadoApp value) => OnPropertyChanged(nameof(PidePassword));
 
-    // ---------------------------------------------------------------- Datos del abogado
+    // ---------------------------------------------------------------- Datos de los abogados
     //
-    // Un despacho puede tener varios abogados; se guardan todos y uno queda "activo"
-    // (el seleccionado en el combo), que es el que se usa al generar documentos —
-    // tanto uno solo como en el lote masivo.
+    // No hay "elegir uno": TODOS los abogados de la lista se aplican a cada documento
+    // generado, cada uno con sus marcadores numerados según su posición
+    // (abogado1Nombre, abogado2Nombre, ...) — para plantillas con más de un firmante.
 
     [ObservableProperty]
     private ObservableCollection<DatosAbogado> _abogados;
 
+    /// <summary>Vista para la UI: un envoltorio por abogado con su número y sus marcadores,
+    /// recalculada cada vez que la lista cambia de tamaño u orden.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
-    [NotifyCanExecuteChangedFor(nameof(EliminarAbogadoCommand))]
-    private DatosAbogado? _abogadoSeleccionado;
+    private ObservableCollection<AbogadoItemViewModel> _abogadosParaMostrar;
 
     [ObservableProperty]
     private bool _abogadoExpandido;
@@ -120,7 +126,12 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeAbogado;
 
-    public bool HayAbogadoSeleccionado => AbogadoSeleccionado is not null;
+    /// <summary>
+    /// Mutar <see cref="Abogados"/> con Add/Remove no reasigna la propiedad, así que el
+    /// setter generado por [ObservableProperty] no dispara — de ahí que este y
+    /// <see cref="ResumenAbogado"/> se notifiquen a mano en cada Agregar/Eliminar.
+    /// </summary>
+    public bool HayAlgunAbogado => Abogados.Count > 0;
 
     public string ResumenAbogado
     {
@@ -131,55 +142,90 @@ public sealed partial class MainViewModel : ViewModelBase
                 return "No hay ningún abogado capturado — se dejarán los marcadores sin sustituir.";
             }
 
-            var datos = AbogadoSeleccionado;
-            if (datos is null)
-            {
-                return $"{Abogados.Count} abogado(s) guardado(s), ninguno seleccionado para generar.";
-            }
+            var incompletos = Abogados.Count(a => !a.EstaCompleto);
+            var listado = string.Join(", ", Abogados.Select((a, i) => $"{i + 1}) {a.EtiquetaCorta}"));
 
-            if (!datos.EstaCompleto)
-            {
-                return $"{datos.EtiquetaCorta} — faltan datos, se dejarán los marcadores sin sustituir.";
-            }
-
-            return $"{datos.Nombre} · FIREL {datos.UsuarioFirel} · Céd. {datos.CedulaProfesional}";
+            return incompletos == 0
+                ? $"{Abogados.Count} abogado(s) — {listado}"
+                : $"{Abogados.Count} abogado(s) — {listado} ({incompletos} con datos incompletos)";
         }
     }
 
-    partial void OnAbogadoSeleccionadoChanged(DatosAbogado? value) => OnPropertyChanged(nameof(HayAbogadoSeleccionado));
+    /// <summary>Reenvía el cambio de cualquier campo de cualquier abogado al resumen,
+    /// que si no solo se refrescaría al agregar o quitar uno de la lista.</summary>
+    private void AlCambiarUnAbogado(object? sender, System.ComponentModel.PropertyChangedEventArgs e) =>
+        OnPropertyChanged(nameof(ResumenAbogado));
 
-    /// <summary>El abogado activo, o uno vacío si no hay ninguno: los marcadores quedan
-    /// sin valor en vez de que la generación reviente por falta de datos.</summary>
-    private DatosAbogado AbogadoParaGenerar() => AbogadoSeleccionado ?? new DatosAbogado();
+    private ObservableCollection<AbogadoItemViewModel> ConstruirVistaDeAbogados() =>
+        new(Abogados.Select((a, i) => new AbogadoItemViewModel(a, i + 1)));
 
     [RelayCommand]
     private void AgregarAbogado()
     {
         var nuevo = new DatosAbogado();
+        nuevo.PropertyChanged += AlCambiarUnAbogado;
         Abogados.Add(nuevo);
-        AbogadoSeleccionado = nuevo;
+        AbogadosParaMostrar = ConstruirVistaDeAbogados();
         AbogadoExpandido = true;
         MensajeAbogado = null;
+        OnPropertyChanged(nameof(ResumenAbogado));
+        OnPropertyChanged(nameof(HayAlgunAbogado));
     }
 
-    [RelayCommand(CanExecute = nameof(HayAbogadoSeleccionado))]
-    private void EliminarAbogado()
+    [RelayCommand]
+    private void EliminarAbogado(AbogadoItemViewModel? item)
     {
-        var actual = AbogadoSeleccionado;
-        if (actual is null)
+        if (item is null)
         {
             return;
         }
 
-        var indice = Abogados.IndexOf(actual);
-        Abogados.Remove(actual);
+        item.Datos.PropertyChanged -= AlCambiarUnAbogado;
+        Abogados.Remove(item.Datos);
+        AbogadosParaMostrar = ConstruirVistaDeAbogados();
+        OnPropertyChanged(nameof(ResumenAbogado));
+        OnPropertyChanged(nameof(HayAlgunAbogado));
 
-        // Se queda mirando "al mismo sitio": el que ocupó la posición, o el anterior si era el último.
-        AbogadoSeleccionado = Abogados.Count == 0
-            ? null
-            : Abogados[Math.Min(indice, Abogados.Count - 1)];
-
+        // Eliminar es difícil de deshacer (no hay "deshacer" en la app): se persiste
+        // de inmediato, para que un cierre accidental no lo resucite.
         GuardarAbogados();
+    }
+
+    /// <summary>Sube un abogado un puesto: cambia si es <c>{{abogado1...}}</c> o <c>{{abogado2...}}</c>.</summary>
+    [RelayCommand]
+    private void MoverAbogadoArriba(AbogadoItemViewModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var indice = Abogados.IndexOf(item.Datos);
+        if (indice <= 0)
+        {
+            return;
+        }
+
+        Abogados.Move(indice, indice - 1);
+        AbogadosParaMostrar = ConstruirVistaDeAbogados();
+    }
+
+    [RelayCommand]
+    private void MoverAbogadoAbajo(AbogadoItemViewModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var indice = Abogados.IndexOf(item.Datos);
+        if (indice < 0 || indice >= Abogados.Count - 1)
+        {
+            return;
+        }
+
+        Abogados.Move(indice, indice + 1);
+        AbogadosParaMostrar = ConstruirVistaDeAbogados();
     }
 
     [RelayCommand]
@@ -187,19 +233,16 @@ public sealed partial class MainViewModel : ViewModelBase
     {
         try
         {
-            _abogadoStore.Guardar(new AbogadosPersistidos
+            _abogadoStore.Guardar(new AbogadosPersistidos { Abogados = Abogados.ToList() });
+
+            MensajeAbogado = Abogados.Count switch
             {
-                Abogados = Abogados.ToList(),
-                SeleccionadoId = AbogadoSeleccionado?.Id
-            });
+                0 => "Sin abogados guardados.",
+                _ when Abogados.All(a => a.EstaCompleto) => "Datos guardados en este equipo.",
+                _ => "Datos guardados, pero hay campos vacíos."
+            };
 
-            MensajeAbogado = Abogados.Count == 0
-                ? "Sin abogados guardados."
-                : AbogadoSeleccionado?.EstaCompleto == true
-                    ? "Datos guardados en este equipo."
-                    : "Datos guardados, pero hay campos vacíos.";
-
-            AbogadoExpandido = AbogadoSeleccionado is null || !AbogadoSeleccionado.EstaCompleto;
+            AbogadoExpandido = Abogados.Count == 0 || Abogados.Any(a => !a.EstaCompleto);
         }
         catch (Exception ex)
         {
@@ -481,6 +524,44 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string? _progresoTexto;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayDocumentoParaAbrir))]
+    [NotifyCanExecuteChangedFor(nameof(AbrirUltimoDocumentoCommand))]
+    private string? _ultimoDocumentoGenerado;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayCarpetaParaAbrir))]
+    [NotifyCanExecuteChangedFor(nameof(AbrirCarpetaGeneradaCommand))]
+    private string? _ultimaCarpetaGenerada;
+
+    public bool HayDocumentoParaAbrir => !string.IsNullOrEmpty(UltimoDocumentoGenerado);
+    public bool HayCarpetaParaAbrir => !string.IsNullOrEmpty(UltimaCarpetaGenerada);
+
+    [RelayCommand(CanExecute = nameof(HayDocumentoParaAbrir))]
+    private void AbrirUltimoDocumento() => AbrirConElSistema(UltimoDocumentoGenerado);
+
+    [RelayCommand(CanExecute = nameof(HayCarpetaParaAbrir))]
+    private void AbrirCarpetaGenerada() => AbrirConElSistema(UltimaCarpetaGenerada);
+
+    private void AbrirConElSistema(string? ruta)
+    {
+        if (ruta is null)
+        {
+            return;
+        }
+
+        try
+        {
+            AbrirEnElSistema?.Invoke(ruta);
+        }
+        catch (Exception ex)
+        {
+            // No es un error de generación (el documento ya existe en disco); se avisa
+            // aparte para no pisar el mensaje de éxito que sigue siendo válido.
+            MensajeEstado = $"No se pudo abrir «{ruta}». {ex.Message}";
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
     private async Task GenerarDocumentoAsync()
     {
@@ -500,8 +581,9 @@ public sealed partial class MainViewModel : ViewModelBase
                 return; // el usuario canceló
             }
 
-            var faltantes = _generador.Generar(RutaPlantilla(), registro.ValoresParaPlantilla(AbogadoParaGenerar()), destino);
+            var faltantes = _generador.Generar(RutaPlantilla(), registro.ValoresParaPlantilla(Abogados), destino);
 
+            UltimoDocumentoGenerado = destino;
             MensajeExito = faltantes.Count == 0
                 ? $"Documento generado: {destino}"
                 : $"Documento generado en {destino}, pero sin valor para: {string.Join(", ", faltantes)}.";
@@ -535,7 +617,7 @@ public sealed partial class MainViewModel : ViewModelBase
         }
 
         var plantilla = RutaPlantilla();
-        var abogado = AbogadoParaGenerar();
+        var abogados = Abogados.ToList(); // instantánea: la lista no debe cambiar a medio lote
 
         Generando = true;
         var generados = 0;
@@ -553,7 +635,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 ProgresoTexto = $"Generando {i + 1} de {marcados.Count}: {registro.Titulo}";
 
                 var destino = Path.Combine(carpeta, NombreUnico(registro, usados));
-                var valores = registro.ValoresParaPlantilla(abogado);
+                var valores = registro.ValoresParaPlantilla(abogados);
 
                 try
                 {
@@ -576,6 +658,11 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             Generando = false;
             ProgresoTexto = null;
+        }
+
+        if (generados > 0)
+        {
+            UltimaCarpetaGenerada = carpeta;
         }
 
         MensajeExito = ResumenDelLote(carpeta, generados, fallidos, sinValor);
@@ -655,4 +742,21 @@ public sealed partial class MainViewModel : ViewModelBase
 
         return PedirCarpetaDeSalida is null ? null : await PedirCarpetaDeSalida();
     }
+}
+
+/// <summary>
+/// Envoltorio de presentación: un <see cref="DatosAbogado"/> más su posición en la lista,
+/// que es lo que decide sus marcadores (<c>{{abogado2Nombre}}</c> para el segundo, etc.).
+/// Se reconstruye entera cada vez que la lista cambia de tamaño u orden, así que
+/// <see cref="Numero"/> nunca queda desactualizado.
+/// </summary>
+public sealed class AbogadoItemViewModel(DatosAbogado datos, int numero)
+{
+    public DatosAbogado Datos { get; } = datos;
+    public int Numero { get; } = numero;
+
+    public string Etiqueta => $"Abogado {Numero}";
+    public string MarcadorNombre => $"{{{{abogado{Numero}Nombre}}}}";
+    public string MarcadorFirel => $"{{{{abogado{Numero}Firel}}}}";
+    public string MarcadorCedula => $"{{{{abogado{Numero}Cedula}}}}";
 }

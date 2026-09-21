@@ -80,7 +80,41 @@ public class RowParserTests
         Assert.NotNull(error);
         Assert.Equal(7, error!.Fila);
         Assert.Equal("esto no tiene el formato esperado", error.ValorCrudo);
-        Assert.Contains("ninguno de los 2 patrones", error.Motivo);
+        Assert.Contains("ninguno de los 3 patrones", error.Motivo);
+    }
+
+    [Theory]
+    // Año de 2 dígitos en vez de 4.
+    [InlineData("263/21 SEXTO COLEGIADO", "263/21", "SEXTO COLEGIADO")]
+    // Ídem, más un caracter suelto al final que forma parte del texto real.
+    [InlineData("309/21 PRIMER COLEGIADO *", "309/21", "PRIMER COLEGIADO *")]
+    [InlineData("302/21 QUINTO COLEGIADO ", "302/21", "QUINTO COLEGIADO")]
+    // Una palabra antes del consecutivo.
+    [InlineData("REVISIÓN 1/2022 SEXTO COLEGIADO", "1/2022", "SEXTO COLEGIADO")]
+    public void Casos_reales_reportados_que_antes_caian_en_errores_de_parseo(
+        string valor, string consecutivoEsperado, string colegioEsperado)
+    {
+        var parser = CrearParser();
+
+        var ok = parser.TryParse(1, Fila(valor), out var registro, out var error);
+
+        Assert.True(ok, error?.Motivo);
+        Assert.Equal(consecutivoEsperado, registro!.Campos.Consecutivo);
+        Assert.Equal(colegioEsperado, registro.Campos.Colegio);
+    }
+
+    [Fact]
+    public void El_consecutivo_al_final_en_vez_de_al_principio_tambien_se_reconoce()
+    {
+        // Caso real reportado: el consecutivo va después del colegio.
+        var parser = CrearParser();
+
+        var ok = parser.TryParse(1, Fila("Primer Colegiado 33/2022"), out var registro, out var error);
+
+        Assert.True(ok, error?.Motivo);
+        Assert.Equal(2, registro!.PatronUsado);
+        Assert.Equal("33/2022", registro.Campos.Consecutivo);
+        Assert.Equal("Primer Colegiado", registro.Campos.Colegio);
     }
 
     [Fact]

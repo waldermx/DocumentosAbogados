@@ -30,18 +30,51 @@ public class DatosAbogadoTests
     };
 
     [Fact]
-    public void Los_datos_del_abogado_se_suman_a_los_campos_de_la_hoja()
+    public void Un_solo_abogado_llena_los_marcadores_sin_numerar_y_tambien_el_numero_1()
     {
         var vm = new RecordDetailViewModel(Registro());
 
-        var valores = vm.ValoresParaPlantilla(Abogado());
+        var valores = vm.ValoresParaPlantilla([Abogado()]);
 
         Assert.Equal("644/2026", valores["consecutivo"]);
         Assert.Equal("JUAN PEREZ LOPEZ", valores["nombre"]);
         Assert.Equal("ANA GARCIA", valores["abogadoNombre"]);
         Assert.Equal("agarcia01", valores["abogadoFirel"]);
         Assert.Equal("1234567", valores["abogadoCedula"]);
+        Assert.Equal("ANA GARCIA", valores["abogado1Nombre"]);
+        Assert.Equal("agarcia01", valores["abogado1Firel"]);
+        Assert.Equal("1234567", valores["abogado1Cedula"]);
         Assert.Equal("12", valores["fila"]);
+    }
+
+    [Fact]
+    public void Dos_abogados_generan_marcadores_independientes_por_numero()
+    {
+        var uno = Abogado();
+        var dos = new DatosAbogado { Nombre = "LUIS TORRES", UsuarioFirel = "ltorres02", CedulaProfesional = "9876543" };
+        var vm = new RecordDetailViewModel(Registro());
+
+        var valores = vm.ValoresParaPlantilla([uno, dos]);
+
+        Assert.Equal("ANA GARCIA", valores["abogado1Nombre"]);
+        Assert.Equal("LUIS TORRES", valores["abogado2Nombre"]);
+        Assert.Equal("ltorres02", valores["abogado2Firel"]);
+        Assert.Equal("9876543", valores["abogado2Cedula"]);
+
+        // Los sin numerar solo los llena el primero: no tendría sentido que el segundo
+        // pisara silenciosamente al primero en un marcador ambiguo.
+        Assert.Equal("ANA GARCIA", valores["abogadoNombre"]);
+    }
+
+    [Fact]
+    public void Sin_ningun_abogado_los_marcadores_no_se_agregan_al_diccionario()
+    {
+        var vm = new RecordDetailViewModel(Registro());
+
+        var valores = vm.ValoresParaPlantilla([]);
+
+        Assert.False(valores.ContainsKey("abogadoNombre"));
+        Assert.False(valores.ContainsKey("abogado1Nombre"));
     }
 
     [Fact]
@@ -54,6 +87,19 @@ public class DatosAbogadoTests
         Assert.Equal("ANA GARCIA", valores["abogadoNombre"]);
         Assert.Equal("x", valores["abogadoFirel"]);
         Assert.Equal("1", valores["abogadoCedula"]);
+    }
+
+    [Fact]
+    public void Los_marcadores_numerados_tambien_se_recortan()
+    {
+        var abogado = new DatosAbogado { Nombre = "  ANA GARCIA  ", UsuarioFirel = " x ", CedulaProfesional = " 1 " };
+
+        var valores = abogado.ValoresParaPlantilla(2);
+
+        Assert.Equal("ANA GARCIA", valores["abogado2Nombre"]);
+        Assert.Equal("x", valores["abogado2Firel"]);
+        Assert.Equal("1", valores["abogado2Cedula"]);
+        Assert.False(valores.ContainsKey("abogadoNombre"));
     }
 
     [Theory]
@@ -131,7 +177,7 @@ public class DatosAbogadoTests
 
         // Sin circuito el marcador ni siquiera se ofrece: el generador lo deja visible
         // en el documento y lo reporta, en vez de sustituirlo por un hueco en blanco.
-        Assert.False(vm.ValoresParaPlantilla(Abogado()).ContainsKey("circuito"));
+        Assert.False(vm.ValoresParaPlantilla([Abogado()]).ContainsKey("circuito"));
     }
 
     [Theory]

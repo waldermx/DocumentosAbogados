@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -49,4 +50,13 @@ public partial class MainWindow : Window
 
         return carpetas.Count > 0 ? carpetas[0].TryGetLocalPath() : null;
     }
+
+    /// <summary>
+    /// Abre un archivo o carpeta con la app asociada del sistema (Word para un .docx,
+    /// el Explorador para una carpeta) — lo mismo que hace doble clic en Explorer.
+    /// Si falla (archivo movido, sin app asociada), la excepción la captura y reporta
+    /// el ViewModel; aquí no se traga silenciosamente.
+    /// </summary>
+    public void AbrirEnElSistema(string ruta) =>
+        Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true })?.Dispose();
 }

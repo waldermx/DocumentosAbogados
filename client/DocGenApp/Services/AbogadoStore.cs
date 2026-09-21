@@ -3,11 +3,13 @@ using DocGenApp.Models;
 
 namespace DocGenApp.Services;
 
-/// <summary>Lo que se persiste: la lista de abogados y cuál estaba activo al cerrar la app.</summary>
+/// <summary>
+/// Lo que se persiste: la lista de abogados, en el orden en que se aplican a la plantilla
+/// (el primero es <c>{{abogado1Nombre}}</c>, el segundo <c>{{abogado2Nombre}}</c>, ...).
+/// </summary>
 public sealed class AbogadosPersistidos
 {
     public List<DatosAbogado> Abogados { get; set; } = [];
-    public Guid? SeleccionadoId { get; set; }
 }
 
 /// <summary>
@@ -44,10 +46,10 @@ public sealed class AbogadoStore
     public string Ruta => _ruta;
 
     /// <summary>
-    /// Carga la lista de abogados y cuál seleccionar. Si nunca se guardó nada en el
-    /// formato nuevo pero existe el archivo del formato anterior (un solo abogado, sin
-    /// lista), se migra una sola vez: se envuelve en una lista de un elemento y se
-    /// persiste ya en <c>abogados.json</c>. El archivo viejo no se borra, por si acaso.
+    /// Carga la lista de abogados. Si nunca se guardó nada en el formato nuevo pero existe
+    /// el archivo del formato anterior (un solo abogado, sin lista), se migra una sola vez:
+    /// se envuelve en una lista de un elemento y se persiste ya en <c>abogados.json</c>.
+    /// El archivo viejo no se borra, por si acaso.
     /// </summary>
     public AbogadosPersistidos Cargar()
     {
@@ -101,7 +103,7 @@ public sealed class AbogadoStore
                 CedulaProfesional = anterior.CedulaProfesional
             };
 
-            return new AbogadosPersistidos { Abogados = [abogado], SeleccionadoId = abogado.Id };
+            return new AbogadosPersistidos { Abogados = [abogado] };
         }
         catch
         {

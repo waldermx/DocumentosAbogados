@@ -4,20 +4,20 @@ namespace DocGenApp.Models;
 
 /// <summary>
 /// Datos de un abogado que firma. No vienen de la hoja: se capturan en la app y se guardan
-/// en el equipo. Puede haber varios (un despacho con más de un abogado); al generar se usa
-/// el que esté seleccionado en <see cref="ViewModels.MainViewModel"/>.
+/// en el equipo. Puede haber varios (un despacho con más de un abogado, o un documento
+/// firmado por dos) — <b>todos</b> los que estén capturados se aplican a cada documento
+/// generado, cada uno con sus propios marcadores numerados según su posición en la lista
+/// (<c>{{abogado1Nombre}}</c>, <c>{{abogado2Nombre}}</c>, ...). No hay "seleccionar uno":
+/// una plantilla con dos firmantes necesita los marcadores de ambos.
 ///
-/// Es <see cref="ObservableObject"/> (no un record ni propiedades simples) para que el
-/// ComboBox de selección y los TextBox del formulario reflejen los cambios de inmediato
-/// sin pasar por el ViewModel contenedor.
+/// Es <see cref="ObservableObject"/> (no un record ni propiedades simples) para que los
+/// TextBox del formulario reflejen los cambios de inmediato sin pasar por el ViewModel
+/// contenedor.
 /// </summary>
 public sealed partial class DatosAbogado : ObservableObject
 {
-    /// <summary>
-    /// Estable mientras el registro existe: identifica la fila seleccionada aunque el
-    /// nombre cambie, y es lo que persiste <see cref="Services.AbogadoStore"/> como
-    /// "abogado activo" entre arranques.
-    /// </summary>
+    /// <summary>Estable mientras el registro existe: identifica la fila en la lista aunque
+    /// el nombre cambie o se reordene.</summary>
     public Guid Id { get; init; } = Guid.NewGuid();
 
     [ObservableProperty]
@@ -34,7 +34,11 @@ public sealed partial class DatosAbogado : ObservableObject
     [NotifyPropertyChangedFor(nameof(EstaCompleto))]
     private string _cedulaProfesional = string.Empty;
 
-    /// <summary>Marcadores que estos campos aportan a la plantilla Word.</summary>
+    /// <summary>
+    /// Marcadores sin numerar (<c>{{abogadoNombre}}</c>, ...). Los rellena en la plantilla
+    /// el <b>primer</b> abogado de la lista, para que una plantilla de un solo firmante
+    /// (la de antes de que existiera esta lista) siga funcionando sin cambiarla.
+    /// </summary>
     public IReadOnlyDictionary<string, string> ValoresParaPlantilla() =>
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -43,11 +47,24 @@ public sealed partial class DatosAbogado : ObservableObject
             ["abogadoCedula"] = CedulaProfesional.Trim()
         };
 
+    /// <summary>
+    /// Marcadores numerados según la posición del abogado en la lista (1-based):
+    /// <c>{{abogado2Nombre}}</c> para el segundo, etc. Es lo que hace falta en una
+    /// plantilla con más de un firmante.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ValoresParaPlantilla(int numero) =>
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [$"abogado{numero}Nombre"] = Nombre.Trim(),
+            [$"abogado{numero}Firel"] = UsuarioFirel.Trim(),
+            [$"abogado{numero}Cedula"] = CedulaProfesional.Trim()
+        };
+
     public bool EstaCompleto =>
         !string.IsNullOrWhiteSpace(Nombre) &&
         !string.IsNullOrWhiteSpace(UsuarioFirel) &&
         !string.IsNullOrWhiteSpace(CedulaProfesional);
 
-    /// <summary>Para el ComboBox de selección: nunca una línea vacía, aunque el registro esté a medio llenar.</summary>
+    /// <summary>Para la lista de abogados: nunca una línea vacía, aunque el registro esté a medio llenar.</summary>
     public string EtiquetaCorta => string.IsNullOrWhiteSpace(Nombre) ? "(sin nombre)" : Nombre;
 }

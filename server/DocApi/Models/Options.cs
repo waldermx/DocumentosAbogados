@@ -64,15 +64,19 @@ public sealed class ParsingOptions
     public string? Regex { get; set; }
 
     /// <summary>
-    /// Del más específico al más laxo. El primero es el formato canónico
-    /// (<c>… DEL &lt;circuito&gt;</c>); el segundo recoge todo lo demás — sin circuito,
-    /// con otra cola o con nada detrás — dejando <c>circuito</c> vacío en vez de
-    /// mandar la fila a errores de parseo.
+    /// Del más específico al más laxo. Cubren las variantes reales encontradas en la hoja:
+    /// año de 2 o 4 dígitos (<c>21</c> o <c>2026</c>), con o sin <c>DEL &lt;circuito&gt;</c>,
+    /// con una palabra delante del consecutivo (<c>REVISIÓN 1/2022 ...</c>) o con el
+    /// consecutivo al final en vez de al principio (<c>Primer Colegiado 33/2022</c>).
     /// </summary>
     public static readonly string[] PatronesPorDefecto =
     [
-        @"^(?<consecutivo>\d+/\d{4})\s+(?<colegio>.+?)\s+DEL\s+(?<circuito>.+)$",
-        @"^(?<consecutivo>\d+/\d{4})\s+(?<colegio>.+)$"
+        // 1) Canónico: [prefijo opcional] consecutivo colegio DEL circuito.
+        @"^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+?)\s+DEL\s+(?<circuito>.+)$",
+        // 2) Igual, sin "DEL <circuito>" al final — no todas las filas lo llevan.
+        @"^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+)$",
+        // 3) El consecutivo va al final en vez de al principio.
+        @"^(?<colegio>.+?)\s+(?<consecutivo>\d+/\d{2,4})$"
     ];
 
     /// <summary>Los patrones efectivos, ya resueltos según lo configurado.</summary>

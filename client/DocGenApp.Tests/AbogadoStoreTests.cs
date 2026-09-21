@@ -22,24 +22,23 @@ public sealed class AbogadoStoreTests : IDisposable
         var persistido = Store().Cargar();
 
         Assert.Empty(persistido.Abogados);
-        Assert.Null(persistido.SeleccionadoId);
     }
 
     [Fact]
-    public void Guarda_y_recupera_varios_abogados_con_el_seleccionado()
+    public void Guarda_y_recupera_varios_abogados_en_el_mismo_orden()
     {
         var uno = new DatosAbogado { Nombre = "ANA GARCIA", UsuarioFirel = "agarcia01", CedulaProfesional = "1" };
         var dos = new DatosAbogado { Nombre = "LUIS TORRES", UsuarioFirel = "ltorres02", CedulaProfesional = "2" };
         var store = Store();
 
-        store.Guardar(new AbogadosPersistidos { Abogados = [uno, dos], SeleccionadoId = dos.Id });
+        store.Guardar(new AbogadosPersistidos { Abogados = [uno, dos] });
 
         var recuperado = Store().Cargar();
 
         Assert.Equal(2, recuperado.Abogados.Count);
-        Assert.Equal(dos.Id, recuperado.SeleccionadoId);
-        Assert.Contains(recuperado.Abogados, a => a.Nombre == "ANA GARCIA");
-        Assert.Contains(recuperado.Abogados, a => a.Nombre == "LUIS TORRES" && a.Id == dos.Id);
+        // El orden importa: decide qué abogado es abogado1 y cuál abogado2 en la plantilla.
+        Assert.Equal("ANA GARCIA", recuperado.Abogados[0].Nombre);
+        Assert.Equal("LUIS TORRES", recuperado.Abogados[1].Nombre);
     }
 
     [Fact]
@@ -69,7 +68,6 @@ public sealed class AbogadoStoreTests : IDisposable
         var migrado = Assert.Single(persistido.Abogados);
         Assert.Equal("ANA GARCIA", migrado.Nombre);
         Assert.Equal("agarcia01", migrado.UsuarioFirel);
-        Assert.Equal(migrado.Id, persistido.SeleccionadoId);
 
         // La migración se persiste: una segunda carga ya no depende del archivo viejo.
         Assert.True(File.Exists(Path.Combine(_carpeta, "abogados.json")));
