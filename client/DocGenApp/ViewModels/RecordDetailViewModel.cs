@@ -41,17 +41,36 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
     /// <summary>Todos los grupos del regex y las columnas extra, sean los de por defecto u otros configurados.</summary>
     public ObservableCollection<CampoViewModel> Campos { get; }
 
-    /// <summary>Etiqueta corta para la lista lateral.</summary>
-    public string Titulo => string.IsNullOrEmpty(Consecutivo)
-        ? $"Fila {Fila}"
-        : $"{Consecutivo} — {Colegio}";
+    /// <summary>
+    /// Línea principal de la lista: el nombre, que es por lo que se busca un expediente.
+    /// Si esa columna no está configurada o la celda está vacía, se cae al consecutivo
+    /// para que la fila siga siendo identificable.
+    /// </summary>
+    public string Titulo
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Nombre))
+            {
+                return Nombre;
+            }
 
+            return string.IsNullOrEmpty(Consecutivo) ? $"Fila {Fila}" : Consecutivo;
+        }
+    }
+
+    /// <summary>Segunda línea: el resto de la identificación del expediente.</summary>
     public string Subtitulo
     {
         get
         {
-            var partes = new[] { Nombre, Circuito }.Where(p => !string.IsNullOrEmpty(p)).ToArray();
-            return partes.Length == 0 ? ValorCrudo : string.Join(" · ", partes);
+            // Si el nombre ya ocupa el título, el consecutivo baja aquí; si no, no se repite.
+            var partes = string.IsNullOrEmpty(Nombre)
+                ? new[] { Colegio, Circuito }
+                : [Consecutivo, Colegio, Circuito];
+
+            var visibles = partes.Where(p => !string.IsNullOrEmpty(p)).ToArray();
+            return visibles.Length == 0 ? ValorCrudo : string.Join(" · ", visibles);
         }
     }
 

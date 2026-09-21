@@ -115,6 +115,7 @@ Detalles que importan:
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | `GET` | `/health` | No | Estado y última sincronización. Para Traefik/Dokploy. |
+| `GET` | `/diagnostico` | Sí | Qué configuración tiene cargada **esta instancia**: patrones activos, columnas extra y cuántas filas cayó en cada patrón. |
 | `GET` | `/registros` | Sí | Registros parseados + errores de parseo + `ultimaSync`. |
 | `GET` | `/registros/{fila}` | Sí | Un registro. |
 | `POST` | `/sync` | Sí | Fuerza un refresco. `?forzar=true` salta el chequeo de cambios y reparsea todo. |
@@ -198,6 +199,27 @@ docker run -p 8080:8080 \
 ```
 
 Monta un volumen en `/app/cache` si quieres conservar el caché entre despliegues. `GET /health` sirve como healthcheck.
+
+## Si algo no cuadra
+
+### «Una fila que debería matchear sigue en errores de parseo»
+
+Desde el cliente, «el patrón está mal» y «el servidor desplegado es de antes» se ven idénticos. Para distinguirlos:
+
+```bash
+curl -H "Authorization: Bearer <password>" https://tu-servidor/diagnostico
+```
+
+Si `patrones` trae **un solo** patrón, la instancia no tiene la lista: o no se ha redesplegado, o su configuración la está pisando. Con la lista cargada, `filasPorPatron` dice cuántas filas resolvió cada uno.
+
+Dos cosas que pisan la lista silenciosamente:
+
+- **`Parsing__Regex` (singular) como variable de entorno.** Solo se usa si `Regexes` está vacío, y `appsettings.json` ya trae `Regexes`, así que hoy se ignora. Si la tenías puesta en Dokploy, bórrala para no confundirte.
+- **`Parsing__Regexes__0` en el entorno.** Reemplaza el patrón de esa posición. Si defines solo el índice 0, el de respaldo desaparece.
+
+### «The Json value could not be converted to System.String. Path: $.resultado»
+
+Servidor anterior a que los enums viajaran como texto: mandaba `{"resultado":0}` y el cliente esperaba `"Actualizado"`. El servidor ya manda texto y **el cliente aguanta las dos formas**, así que la combinación cliente nuevo + servidor viejo también funciona. Si lo ves, actualiza el cliente.
 
 ## Fuera de alcance (v1)
 

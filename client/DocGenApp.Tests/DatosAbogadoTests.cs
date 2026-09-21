@@ -69,12 +69,40 @@ public class DatosAbogadoTests
     }
 
     [Fact]
-    public void El_nombre_de_la_hoja_aparece_en_el_subtitulo_de_la_lista()
+    public void El_nombre_encabeza_la_lista_y_el_resto_baja_al_subtitulo()
     {
         var vm = new RecordDetailViewModel(Registro());
 
-        Assert.Contains("JUAN PEREZ LOPEZ", vm.Subtitulo);
-        Assert.Contains("DECIMOPRIMER CIRCUITO", vm.Subtitulo);
+        Assert.Equal("JUAN PEREZ LOPEZ", vm.Titulo);
+        Assert.Equal("644/2026 · TERCER COLEGIADO · DECIMOPRIMER CIRCUITO", vm.Subtitulo);
+    }
+
+    [Fact]
+    public void Sin_nombre_el_titulo_cae_al_consecutivo_y_no_lo_repite_abajo()
+    {
+        var registro = Registro();
+        registro.Campos.Grupos.Remove("nombre");
+
+        var vm = new RecordDetailViewModel(registro);
+
+        Assert.Equal("644/2026", vm.Titulo);
+        Assert.Equal("TERCER COLEGIADO · DECIMOPRIMER CIRCUITO", vm.Subtitulo);
+    }
+
+    [Fact]
+    public void Sin_nombre_ni_consecutivo_el_titulo_identifica_por_fila()
+    {
+        var registro = new RegistroDto
+        {
+            Fila = 9,
+            ValorCrudo = "algo raro",
+            Campos = new ParsedFields { Grupos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) }
+        };
+
+        var vm = new RecordDetailViewModel(registro);
+
+        Assert.Equal("Fila 9", vm.Titulo);
+        Assert.Equal("algo raro", vm.Subtitulo);
     }
 
     [Fact]
@@ -98,8 +126,8 @@ public class DatosAbogadoTests
 
         var vm = new RecordDetailViewModel(registro);
 
-        Assert.Equal("777/2026 — SEGUNDO TRIBUNAL UNITARIO", vm.Titulo);
-        Assert.Equal("MARIA RUIZ", vm.Subtitulo);
+        Assert.Equal("MARIA RUIZ", vm.Titulo);
+        Assert.Equal("777/2026 · SEGUNDO TRIBUNAL UNITARIO", vm.Subtitulo);
 
         // Sin circuito el marcador ni siquiera se ofrece: el generador lo deja visible
         // en el documento y lo reporta, en vez de sustituirlo por un hueco en blanco.

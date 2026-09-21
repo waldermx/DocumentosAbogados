@@ -9,6 +9,19 @@
     <StackPanel Spacing="18" Margin="4">
 
       <StackPanel Spacing="2">
+        <TextBlock Classes="etiqueta" Text="NOMBRE" />
+        <TextBlock Classes="valor"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   Text="{Binding Nombre}"
+                   IsVisible="{Binding Nombre, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Classes="subtitulo"
+                   FontStyle="Italic"
+                   Text="Sin nombre en la hoja para esta fila."
+                   IsVisible="{Binding Nombre, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+      </StackPanel>
+
+      <StackPanel Spacing="2">
         <TextBlock Classes="etiqueta" Text="FILA EN LA HOJA" />
         <TextBlock Classes="valor" Text="{Binding Fila}" />
       </StackPanel>

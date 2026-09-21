@@ -22,6 +22,9 @@ public sealed class RowParser
     /// </summary>
     public IReadOnlyList<string> NombresDeGrupo { get; }
 
+    /// <summary>Los patrones realmente activos, en orden. Lo expone <c>GET /diagnostico</c>.</summary>
+    public IReadOnlyList<string> Patrones { get; }
+
     public RowParser(IOptions<ParsingOptions> options, ILogger<RowParser> logger)
     {
         _logger = logger;
@@ -37,6 +40,7 @@ public sealed class RowParser
         }
 
         _regexes = patrones.Select(Compilar).ToArray();
+        Patrones = patrones;
 
         NombresDeGrupo = _regexes
             .SelectMany(r => r.GetGroupNames())

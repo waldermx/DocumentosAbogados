@@ -37,6 +37,7 @@ public class RowParserTests
 
     [Theory]
     // Sin nada detrás del colegio.
+    [InlineData("133/2025 CUARTO COLEGIADO", "CUARTO COLEGIADO")]
     [InlineData("644/2026 TERCER COLEGIADO", "TERCER COLEGIADO")]
     // Con otra cola que no es "DEL <circuito>".
     [InlineData("12/2025 PRIMER TRIBUNAL UNITARIO EN MATERIA PENAL", "PRIMER TRIBUNAL UNITARIO EN MATERIA PENAL")]

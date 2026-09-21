@@ -1,4 +1,34 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace DocGenApp.Models;
+
+/// <summary>
+/// Lee un campo de texto aunque el servidor lo mande como número o como booleano.
+/// Existe porque los servidores desplegados antes de que los enums viajaran como texto
+/// responden <c>{"resultado":0}</c>, y eso reventaba la deserialización entera de la
+/// respuesta de <c>POST /sync</c> — un campo que la app ni siquiera lee.
+/// </summary>
+public sealed class TextoTolerante : JsonConverter<string>
+{
+    /// <summary>Sin esto, System.Text.Json se salta el converter ante un <c>null</c>
+    /// y asigna null a una propiedad declarada no nulable.</summary>
+    public override bool HandleNull => true;
+
+    public override string Read(ref Utf8JsonReader lector, Type tipo, JsonSerializerOptions opciones) =>
+        lector.TokenType switch
+        {
+            JsonTokenType.String => lector.GetString() ?? string.Empty,
+            JsonTokenType.Number => lector.GetInt64().ToString(),
+            JsonTokenType.True => "true",
+            JsonTokenType.False => "false",
+            JsonTokenType.Null => string.Empty,
+            _ => string.Empty
+        };
+
+    public override void Write(Utf8JsonWriter escritor, string valor, JsonSerializerOptions opciones) =>
+        escritor.WriteStringValue(valor);
+}
 
 /// <summary>Espejo de los DTOs del servidor. Se mantienen deliberadamente simples y tolerantes.</summary>
 public sealed class ParsedFields
@@ -43,6 +73,7 @@ public sealed class RegistrosResponseDto
 
 public sealed class SyncResultDto
 {
+    [JsonConverter(typeof(TextoTolerante))]
     public string Resultado { get; set; } = string.Empty;
     public DateTimeOffset? UltimaSync { get; set; }
     public int TotalRegistros { get; set; }

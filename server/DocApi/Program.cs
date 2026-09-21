@@ -3,7 +3,15 @@ using DocApi.Endpoints;
 using DocApi.Models;
 using DocApi.Services;
 
+using System.Text.Json.Serialization;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Los enums viajan como texto ("Actualizado"), no como el número de su posición.
+// Con números, añadir un valor al enum cambiaría el significado de los ya publicados,
+// y el cliente —que declara Resultado como string— no podía deserializar la respuesta.
+builder.Services.ConfigureHttpJsonOptions(opciones =>
+    opciones.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // --- Configuración (appsettings + env vars con doble guion bajo: Auth__MasterPassword, etc.) ---
 builder.Services.Configure<GoogleSheetsOptions>(builder.Configuration.GetSection(GoogleSheetsOptions.Section));
