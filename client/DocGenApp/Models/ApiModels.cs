@@ -9,6 +9,9 @@ public sealed class ParsedFields
     public string Colegio => Obtener("colegio");
     public string Circuito => Obtener("circuito");
 
+    /// <summary>Columna extra de la hoja, unida al registro por número de fila.</summary>
+    public string Nombre => Obtener("nombre");
+
     private string Obtener(string nombre) =>
         Grupos.TryGetValue(nombre, out var v) ? v : string.Empty;
 }
@@ -17,6 +20,10 @@ public sealed class RegistroDto
 {
     public int Fila { get; set; }
     public string ValorCrudo { get; set; } = string.Empty;
+
+    /// <summary>Índice del patrón que reconoció la fila; &gt; 0 significa que cayó en uno de respaldo.</summary>
+    public int PatronUsado { get; set; }
+
     public ParsedFields Campos { get; set; } = new();
 }
 

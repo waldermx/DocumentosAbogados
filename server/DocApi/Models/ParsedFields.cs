@@ -14,6 +14,9 @@ public sealed class ParsedFields
     public string Colegio => Obtener("colegio");
     public string Circuito => Obtener("circuito");
 
+    /// <summary>Atajo para la columna extra <c>nombre</c>; vacío si no está configurada.</summary>
+    public string Nombre => Obtener("nombre");
+
     private string Obtener(string nombre) =>
         Grupos.TryGetValue(nombre, out var valor) ? valor : string.Empty;
 }

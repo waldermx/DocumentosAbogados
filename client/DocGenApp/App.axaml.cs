@@ -23,13 +23,15 @@ public partial class App : Application
                 api,
                 new LocalCacheService(),
                 new CredentialStore(),
+                new AbogadoStore(),
                 new WordDocumentGenerator(),
                 settings);
 
             var ventana = new MainWindow { DataContext = viewModel };
 
-            // La vista provee el diálogo de guardado; el ViewModel no conoce la UI.
+            // La vista provee los diálogos; el ViewModel no conoce la UI.
             viewModel.PedirRutaDeGuardado = ventana.PedirRutaDeGuardadoAsync;
+            viewModel.PedirCarpetaDeSalida = ventana.PedirCarpetaDeSalidaAsync;
 
             desktop.MainWindow = ventana;
             desktop.Exit += (_, _) => api.Dispose();

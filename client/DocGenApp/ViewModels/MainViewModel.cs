@@ -21,24 +21,42 @@ public sealed partial class MainViewModel : ViewModelBase
     private readonly ApiClient _api;
     private readonly LocalCacheService _cacheLocal;
     private readonly CredentialStore _credenciales;
+    private readonly AbogadoStore _abogadoStore;
     private readonly WordDocumentGenerator _generador;
     private readonly AppSettings _settings;
 
+    /// <summary>Lista completa; <see cref="Registros"/> es la vista ya filtrada que ve la UI.</summary>
+    private List<RecordDetailViewModel> _todos = [];
+
+    /// <summary>Evita que marcar en bloque dispare el recálculo una vez por fila.</summary>
+    private bool _marcandoEnBloque;
+
     /// <summary>Lo inyecta la vista para poder abrir el diálogo de guardado desde el comando.</summary>
     public Func<string, Task<string?>>? PedirRutaDeGuardado { get; set; }
+
+    /// <summary>Ídem para el diálogo de carpeta, que usa la generación masiva.</summary>
+    public Func<Task<string?>>? PedirCarpetaDeSalida { get; set; }
 
     public MainViewModel(
         ApiClient api,
         LocalCacheService cacheLocal,
         CredentialStore credenciales,
+        AbogadoStore abogadoStore,
         WordDocumentGenerator generador,
         AppSettings settings)
     {
         _api = api;
         _cacheLocal = cacheLocal;
         _credenciales = credenciales;
+        _abogadoStore = abogadoStore;
         _generador = generador;
         _settings = settings;
+
+        var abogado = _abogadoStore.Cargar();
+        _abogadoNombre = abogado.Nombre;
+        _abogadoFirel = abogado.UsuarioFirel;
+        _abogadoCedula = abogado.CedulaProfesional;
+        _abogadoExpandido = !abogado.EstaCompleto;
     }
 
     [ObservableProperty]
@@ -80,6 +98,159 @@ public sealed partial class MainViewModel : ViewModelBase
     public bool PidePassword => Estado == EstadoApp.PidiendoPassword;
 
     partial void OnEstadoChanged(EstadoApp value) => OnPropertyChanged(nameof(PidePassword));
+
+    // ---------------------------------------------------------------- Datos del abogado
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
+    private string _abogadoNombre;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
+    private string _abogadoFirel;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
+    private string _abogadoCedula;
+
+    [ObservableProperty]
+    private bool _abogadoExpandido;
+
+    [ObservableProperty]
+    private string? _mensajeAbogado;
+
+    public string ResumenAbogado
+    {
+        get
+        {
+            var datos = DatosAbogadoActuales();
+            if (!datos.EstaCompleto)
+            {
+                return "Faltan datos del abogado — se dejarán los marcadores sin sustituir.";
+            }
+
+            return $"{datos.Nombre} · FIREL {datos.UsuarioFirel} · Céd. {datos.CedulaProfesional}";
+        }
+    }
+
+    private DatosAbogado DatosAbogadoActuales() => new()
+    {
+        Nombre = AbogadoNombre,
+        UsuarioFirel = AbogadoFirel,
+        CedulaProfesional = AbogadoCedula
+    };
+
+    [RelayCommand]
+    private void GuardarAbogado()
+    {
+        var datos = DatosAbogadoActuales();
+
+        try
+        {
+            _abogadoStore.Guardar(datos);
+            MensajeAbogado = datos.EstaCompleto
+                ? "Datos guardados en este equipo."
+                : "Datos guardados, pero hay campos vacíos.";
+            AbogadoExpandido = !datos.EstaCompleto;
+        }
+        catch (Exception ex)
+        {
+            MensajeAbogado = $"No se pudieron guardar: {ex.Message}";
+        }
+    }
+
+    // ---------------------------------------------------------------- Selección múltiple
+
+    [ObservableProperty]
+    private string _filtro = string.Empty;
+
+    partial void OnFiltroChanged(string value) => AplicarFiltro();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayMarcados))]
+    [NotifyPropertyChangedFor(nameof(TextoBotonMasivo))]
+    private int _totalMarcados;
+
+    public bool HayMarcados => TotalMarcados > 0;
+
+    public string TextoBotonMasivo => TotalMarcados switch
+    {
+        0 => "Generar seleccionados",
+        1 => "Generar 1 documento",
+        _ => $"Generar {TotalMarcados} documentos"
+    };
+
+    /// <summary>
+    /// Estado de la casilla de cabecera. <c>null</c> = algunos marcados, para que
+    /// se vea de un vistazo que la selección es parcial.
+    /// </summary>
+    public bool? TodosMarcados
+    {
+        get
+        {
+            if (Registros.Count == 0 || TotalMarcados == 0)
+            {
+                return false;
+            }
+
+            return Registros.All(r => r.Marcado) ? true : null;
+        }
+        set => MarcarVisibles(value == true);
+    }
+
+    [RelayCommand]
+    private void MarcarTodos() => MarcarVisibles(true);
+
+    [RelayCommand]
+    private void DesmarcarTodos()
+    {
+        // Se desmarca todo, no solo lo visible: si no, un filtro activo dejaría
+        // marcas escondidas que igual se generarían.
+        _marcandoEnBloque = true;
+        foreach (var registro in _todos)
+        {
+            registro.Marcado = false;
+        }
+        _marcandoEnBloque = false;
+        RecalcularMarcados();
+    }
+
+    /// <summary>Marca o desmarca lo que el filtro deja a la vista: es el «seleccionar todos» útil.</summary>
+    private void MarcarVisibles(bool marcado)
+    {
+        _marcandoEnBloque = true;
+        foreach (var registro in Registros)
+        {
+            registro.Marcado = marcado;
+        }
+        _marcandoEnBloque = false;
+        RecalcularMarcados();
+    }
+
+    private void RecalcularMarcados()
+    {
+        TotalMarcados = _todos.Count(r => r.Marcado);
+        OnPropertyChanged(nameof(TodosMarcados));
+        GenerarSeleccionadosCommand.NotifyCanExecuteChanged();
+    }
+
+    private void AplicarFiltro()
+    {
+        var termino = Filtro.Trim();
+        var visibles = termino.Length == 0
+            ? _todos
+            : _todos.Where(r => r.Coincide(termino)).ToList();
+
+        Registros = new ObservableCollection<RecordDetailViewModel>(visibles);
+        OnPropertyChanged(nameof(TodosMarcados));
+
+        if (RegistroSeleccionado is null || !Registros.Contains(RegistroSeleccionado))
+        {
+            RegistroSeleccionado = Registros.FirstOrDefault();
+        }
+    }
+
+    // ---------------------------------------------------------------- Carga de datos
 
     /// <summary>Arranque: si hay password guardada se carga directo; si no, se pide.</summary>
     public async Task InicializarAsync()
@@ -196,7 +367,7 @@ public sealed partial class MainViewModel : ViewModelBase
         Poblar(payload);
 
         Estado = EstadoApp.Ok;
-        MensajeEstado = $"{Registros.Count} registros cargados.";
+        MensajeEstado = $"{_todos.Count} registros cargados.";
         UltimaSyncTexto = payload.UltimaSync is { } s
             ? $"Última sincronización: {s.ToLocalTime():dd/MM/yyyy HH:mm}"
             : "Sin sincronizar todavía.";
@@ -227,17 +398,40 @@ public sealed partial class MainViewModel : ViewModelBase
     private void Poblar(RegistrosResponseDto payload)
     {
         var filaSeleccionada = RegistroSeleccionado?.Fila;
+        var filasMarcadas = _todos.Where(r => r.Marcado).Select(r => r.Fila).ToHashSet();
 
-        Registros = new ObservableCollection<RecordDetailViewModel>(
-            payload.Registros.Select(r => new RecordDetailViewModel(r)));
+        _todos = payload.Registros.Select(r =>
+        {
+            var vm = new RecordDetailViewModel(r) { Marcado = filasMarcadas.Contains(r.Fila) };
+            vm.AlCambiarMarcado = () =>
+            {
+                if (!_marcandoEnBloque)
+                {
+                    RecalcularMarcados();
+                }
+            };
+            return vm;
+        }).ToList();
+
         ErroresParseo = new ObservableCollection<ErrorParseoDto>(payload.ErroresParseo);
         TotalErroresParseo = payload.ErroresParseo.Count;
+
+        AplicarFiltro();
+        RecalcularMarcados();
 
         // Se intenta conservar la selección tras un refresco.
         RegistroSeleccionado = filaSeleccionada is null
             ? Registros.FirstOrDefault()
             : Registros.FirstOrDefault(r => r.Fila == filaSeleccionada) ?? Registros.FirstOrDefault();
     }
+
+    // ---------------------------------------------------------------- Generación
+
+    [ObservableProperty]
+    private bool _generando;
+
+    [ObservableProperty]
+    private string? _progresoTexto;
 
     [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
     private async Task GenerarDocumentoAsync()
@@ -252,17 +446,13 @@ public sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var plantilla = Path.IsPathRooted(_settings.TemplatePath)
-                ? _settings.TemplatePath
-                : Path.Combine(AppContext.BaseDirectory, _settings.TemplatePath);
-
             var destino = await ResolverDestinoAsync(registro);
             if (destino is null)
             {
                 return; // el usuario canceló
             }
 
-            var faltantes = _generador.Generar(plantilla, registro.ValoresParaPlantilla(), destino);
+            var faltantes = _generador.Generar(RutaPlantilla(), registro.ValoresParaPlantilla(DatosAbogadoActuales()), destino);
 
             MensajeExito = faltantes.Count == 0
                 ? $"Documento generado: {destino}"
@@ -274,6 +464,125 @@ public sealed partial class MainViewModel : ViewModelBase
             MensajeEstado = $"No se pudo generar el documento. {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// Generación masiva: un .docx por registro marcado, todos en la misma carpeta.
+    /// Un fallo en una fila no aborta el lote; se cuentan y se reportan al final.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HayMarcados))]
+    private async Task GenerarSeleccionadosAsync()
+    {
+        var marcados = _todos.Where(r => r.Marcado).OrderBy(r => r.Fila).ToList();
+        if (marcados.Count == 0)
+        {
+            return;
+        }
+
+        MensajeExito = null;
+
+        var carpeta = await ResolverCarpetaAsync();
+        if (carpeta is null)
+        {
+            return; // el usuario canceló
+        }
+
+        var plantilla = RutaPlantilla();
+        var abogado = DatosAbogadoActuales();
+
+        Generando = true;
+        var generados = 0;
+        var fallidos = new List<string>();
+        var sinValor = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            Directory.CreateDirectory(carpeta);
+
+            for (var i = 0; i < marcados.Count; i++)
+            {
+                var registro = marcados[i];
+                ProgresoTexto = $"Generando {i + 1} de {marcados.Count}: {registro.Titulo}";
+
+                var destino = Path.Combine(carpeta, NombreUnico(registro, usados));
+                var valores = registro.ValoresParaPlantilla(abogado);
+
+                try
+                {
+                    // Fuera del hilo de UI: con muchos registros, abrir y reescribir
+                    // cada .docx bloquearía la ventana.
+                    var faltantes = await Task.Run(() => _generador.Generar(plantilla, valores, destino));
+                    foreach (var f in faltantes)
+                    {
+                        sinValor.Add(f);
+                    }
+                    generados++;
+                }
+                catch (Exception ex)
+                {
+                    fallidos.Add($"fila {registro.Fila}: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            Generando = false;
+            ProgresoTexto = null;
+        }
+
+        MensajeExito = ResumenDelLote(carpeta, generados, fallidos, sinValor);
+
+        if (fallidos.Count > 0)
+        {
+            Estado = EstadoApp.Error;
+            MensajeEstado = $"{fallidos.Count} documento(s) no se pudieron generar. {string.Join(" | ", fallidos.Take(3))}";
+        }
+    }
+
+    private static string ResumenDelLote(
+        string carpeta, int generados, List<string> fallidos, HashSet<string> sinValor)
+    {
+        var resumen = $"{generados} documento(s) generados en {carpeta}.";
+
+        if (fallidos.Count > 0)
+        {
+            resumen += $" {fallidos.Count} con error.";
+        }
+
+        if (sinValor.Count > 0)
+        {
+            resumen += $" Marcadores sin valor en alguna plantilla: {string.Join(", ", sinValor.Order())}.";
+        }
+
+        return resumen;
+    }
+
+    /// <summary>
+    /// Dos registros distintos pueden compartir consecutivo; sin esto, el segundo
+    /// sobrescribiría al primero en silencio.
+    /// </summary>
+    private static string NombreUnico(RecordDetailViewModel registro, HashSet<string> usados)
+    {
+        var nombre = registro.NombreArchivoSugerido();
+        if (usados.Add(nombre))
+        {
+            return nombre;
+        }
+
+        var baseNombre = Path.GetFileNameWithoutExtension(nombre);
+        var candidato = $"{baseNombre}-fila{registro.Fila}.docx";
+        for (var n = 2; !usados.Add(candidato); n++)
+        {
+            candidato = $"{baseNombre}-fila{registro.Fila}-{n}.docx";
+        }
+
+        return candidato;
+    }
+
+    private string RutaPlantilla() =>
+        Path.IsPathRooted(_settings.TemplatePath)
+            ? _settings.TemplatePath
+            : Path.Combine(AppContext.BaseDirectory, _settings.TemplatePath);
 
     private async Task<string?> ResolverDestinoAsync(RecordDetailViewModel registro)
     {
@@ -287,5 +596,15 @@ public sealed partial class MainViewModel : ViewModelBase
         }
 
         return PedirRutaDeGuardado is null ? null : await PedirRutaDeGuardado(sugerido);
+    }
+
+    private async Task<string?> ResolverCarpetaAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_settings.DefaultOutputFolder))
+        {
+            return _settings.DefaultOutputFolder;
+        }
+
+        return PedirCarpetaDeSalida is null ? null : await PedirCarpetaDeSalida();
     }
 }

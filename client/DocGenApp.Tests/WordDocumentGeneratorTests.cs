@@ -149,6 +149,10 @@ public sealed class WordDocumentGeneratorTests : IDisposable
         var valores = Valores();
         valores["valorCrudo"] = "644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO";
         valores["fecha"] = "21/09/2026";
+        valores["nombre"] = "JUAN PEREZ LOPEZ";
+        valores["abogadoNombre"] = "ANA GARCIA";
+        valores["abogadoFirel"] = "agarcia01";
+        valores["abogadoCedula"] = "1234567";
 
         var salida = Ruta("salida-ejemplo.docx");
         var faltantes = new WordDocumentGenerator().Generar(plantilla, valores, salida);
@@ -158,5 +162,25 @@ public sealed class WordDocumentGeneratorTests : IDisposable
         Assert.DoesNotContain("{{", texto);
         Assert.Contains("644/2026", texto);
         Assert.Contains("DECIMOPRIMER CIRCUITO", texto);
+        Assert.Contains("JUAN PEREZ LOPEZ", texto);
+        Assert.Contains("agarcia01", texto);
+    }
+
+    [Fact]
+    public void Un_documento_generado_con_datos_de_abogado_vacios_los_reporta_como_faltantes()
+    {
+        // Es el caso de un usuario que no ha capturado sus datos todavía: el documento
+        // sale igual, pero con los marcadores a la vista y el aviso en la app.
+        var plantilla = CrearPlantilla("abogado.docx", ["Firma: {{abogadoNombre}} — FIREL {{abogadoFirel}}"]);
+        var salida = Ruta("salida-abogado.docx");
+
+        var valores = Valores();
+        valores["abogadoNombre"] = string.Empty;
+        valores["abogadoFirel"] = string.Empty;
+
+        var faltantes = new WordDocumentGenerator().Generar(plantilla, valores, salida);
+
+        Assert.Equal(["abogadoFirel", "abogadoNombre"], faltantes.Order());
+        Assert.Contains("{{abogadoNombre}}", TextoDe(salida));
     }
 }

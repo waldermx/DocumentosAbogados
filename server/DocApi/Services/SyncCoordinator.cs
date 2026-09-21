@@ -121,8 +121,8 @@ public sealed class SyncCoordinator : IDisposable
                 modifiedTime = await _source.GetModifiedTimeAsync(ct).ConfigureAwait(false);
             }
 
-            // --- Paso 2: lectura completa de la columna ---
-            var valoresNuevos = await _source.LeerColumnaAsync(ct).ConfigureAwait(false);
+            // --- Paso 2: lectura completa de las columnas configuradas ---
+            var valoresNuevos = await _source.LeerFilasAsync(ct).ConfigureAwait(false);
 
             // --- Paso 3: diff por fila ---
             var registrosPorFila = anterior.Registros.ToDictionary(r => r.Fila);
@@ -135,9 +135,11 @@ public sealed class SyncCoordinator : IDisposable
 
             foreach (var (fila, valor) in valoresNuevos.OrderBy(kv => kv.Key))
             {
+                // Se compara la firma y no solo la columna principal: editar una columna
+                // extra (p. ej. el nombre) también tiene que invalidar la fila.
                 var sinCambios = !forzarLecturaCompleta
                     && anterior.ValoresRawPorFila.TryGetValue(fila, out var valorAnterior)
-                    && string.Equals(valorAnterior, valor, StringComparison.Ordinal);
+                    && string.Equals(valorAnterior.Firma, valor.Firma, StringComparison.Ordinal);
 
                 if (sinCambios)
                 {

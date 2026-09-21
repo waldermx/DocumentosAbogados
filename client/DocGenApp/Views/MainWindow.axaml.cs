@@ -34,4 +34,19 @@ public partial class MainWindow : Window
 
         return archivo?.TryGetLocalPath();
     }
+
+    /// <summary>
+    /// Diálogo de carpeta para la generación masiva: se elige una vez y ahí caen
+    /// todos los .docx del lote.
+    /// </summary>
+    public async Task<string?> PedirCarpetaDeSalidaAsync()
+    {
+        var carpetas = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Carpeta donde guardar los documentos",
+            AllowMultiple = false
+        });
+
+        return carpetas.Count > 0 ? carpetas[0].TryGetLocalPath() : null;
+    }
 }

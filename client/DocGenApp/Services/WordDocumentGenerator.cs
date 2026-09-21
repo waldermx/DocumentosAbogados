@@ -145,9 +145,16 @@ public sealed class WordDocumentGenerator
         body.Append(Parrafo("Reemplaza este archivo por tu plantilla real."));
         body.Append(Parrafo("Los siguientes marcadores se sustituyen al generar el documento:"));
         body.Append(Parrafo(string.Empty));
+        body.Append(Parrafo("De la hoja:", negrita: true));
         body.Append(Parrafo("Consecutivo: {{consecutivo}}"));
         body.Append(Parrafo("Colegio: {{colegio}}"));
         body.Append(Parrafo("Circuito: {{circuito}}"));
+        body.Append(Parrafo("Nombre: {{nombre}}"));
+        body.Append(Parrafo(string.Empty));
+        body.Append(Parrafo("Del abogado (se capturan en la app, no en la hoja):", negrita: true));
+        body.Append(Parrafo("Nombre del abogado: {{abogadoNombre}}"));
+        body.Append(Parrafo("Usuario FIREL: {{abogadoFirel}}"));
+        body.Append(Parrafo("Cédula profesional: {{abogadoCedula}}"));
         body.Append(Parrafo(string.Empty));
         body.Append(Parrafo("Valor original de la hoja: {{valorCrudo}}"));
         body.Append(Parrafo("Fecha de generación: {{fecha}}"));

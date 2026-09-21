@@ -40,14 +40,14 @@ public sealed class SheetCache
     public sealed record Snapshot(
         IReadOnlyList<RegistroDto> Registros,
         IReadOnlyList<ErrorParseoDto> ErroresParseo,
-        IReadOnlyDictionary<int, string> ValoresRawPorFila,
+        IReadOnlyDictionary<int, FilaCruda> ValoresRawPorFila,
         DateTimeOffset? UltimaSync,
         DateTimeOffset? UltimoModifiedTime)
     {
         public static readonly Snapshot Vacio = new(
             Array.Empty<RegistroDto>(),
             Array.Empty<ErrorParseoDto>(),
-            new Dictionary<int, string>(),
+            new Dictionary<int, FilaCruda>(),
             null,
             null);
     }
@@ -57,7 +57,7 @@ public sealed class SheetCache
     private sealed record EstadoPersistido(
         List<RegistroDto> Registros,
         List<ErrorParseoDto> ErroresParseo,
-        Dictionary<int, string> ValoresRawPorFila,
+        Dictionary<int, FilaCruda> ValoresRawPorFila,
         DateTimeOffset? UltimaSync,
         DateTimeOffset? UltimoModifiedTime);
 

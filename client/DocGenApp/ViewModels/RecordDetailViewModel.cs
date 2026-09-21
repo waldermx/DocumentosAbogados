@@ -21,8 +21,24 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
     public string Consecutivo => Registro.Campos.Consecutivo;
     public string Colegio => Registro.Campos.Colegio;
     public string Circuito => Registro.Campos.Circuito;
+    public string Nombre => Registro.Campos.Nombre;
 
-    /// <summary>Todos los grupos del regex, sean los tres por defecto u otros configurados.</summary>
+    /// <summary>
+    /// Marca de la casilla para la generación masiva. Es independiente de la selección
+    /// de la lista (esa solo decide qué registro se muestra en el panel de detalle).
+    /// </summary>
+    [ObservableProperty]
+    private bool _marcado;
+
+    /// <summary>
+    /// Se lo inyecta <see cref="MainViewModel"/> para enterarse de cada marca sin
+    /// suscribirse a un evento por fila.
+    /// </summary>
+    public Action? AlCambiarMarcado { get; set; }
+
+    partial void OnMarcadoChanged(bool value) => AlCambiarMarcado?.Invoke();
+
+    /// <summary>Todos los grupos del regex y las columnas extra, sean los de por defecto u otros configurados.</summary>
     public ObservableCollection<CampoViewModel> Campos { get; }
 
     /// <summary>Etiqueta corta para la lista lateral.</summary>
@@ -30,10 +46,23 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
         ? $"Fila {Fila}"
         : $"{Consecutivo} — {Colegio}";
 
-    public string Subtitulo => string.IsNullOrEmpty(Circuito) ? ValorCrudo : Circuito;
+    public string Subtitulo
+    {
+        get
+        {
+            var partes = new[] { Nombre, Circuito }.Where(p => !string.IsNullOrEmpty(p)).ToArray();
+            return partes.Length == 0 ? ValorCrudo : string.Join(" · ", partes);
+        }
+    }
+
+    /// <summary>Texto sobre el que filtra la búsqueda de la lista.</summary>
+    public bool Coincide(string termino) =>
+        ValorCrudo.Contains(termino, StringComparison.OrdinalIgnoreCase) ||
+        Nombre.Contains(termino, StringComparison.OrdinalIgnoreCase) ||
+        Fila.ToString().Contains(termino, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Diccionario que consume <see cref="Services.WordDocumentGenerator"/>.</summary>
-    public Dictionary<string, string> ValoresParaPlantilla()
+    public Dictionary<string, string> ValoresParaPlantilla(DatosAbogado abogado)
     {
         var valores = new Dictionary<string, string>(Registro.Campos.Grupos, StringComparer.OrdinalIgnoreCase)
         {
@@ -41,6 +70,13 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
             ["fila"] = Fila.ToString(),
             ["fecha"] = DateTime.Now.ToString("dd/MM/yyyy")
         };
+
+        // Los datos del abogado son locales y los mismos para todos los registros.
+        foreach (var (clave, valor) in abogado.ValoresParaPlantilla())
+        {
+            valores[clave] = valor;
+        }
+
         return valores;
     }
 

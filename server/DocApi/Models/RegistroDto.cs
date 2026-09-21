@@ -8,6 +8,12 @@ public sealed class RegistroDto
 
     public required string ValorCrudo { get; init; }
 
+    /// <summary>
+    /// Índice (0-based) del patrón de <c>Parsing:Regexes</c> que reconoció la fila.
+    /// Sirve para ver de un vistazo qué filas cayeron en el patrón laxo.
+    /// </summary>
+    public int PatronUsado { get; init; }
+
     public required ParsedFields Campos { get; init; }
 }
 

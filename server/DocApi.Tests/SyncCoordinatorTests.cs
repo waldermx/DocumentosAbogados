@@ -13,7 +13,7 @@ public class SyncCoordinatorTests
     {
         public bool EstaConfigurado => true;
         public DateTimeOffset? ModifiedTime { get; set; } = DateTimeOffset.UnixEpoch;
-        public Dictionary<int, string> Valores { get; set; } = new();
+        public Dictionary<int, FilaCruda> Valores { get; set; } = new();
 
         public int LlamadasModifiedTime { get; private set; }
         public int LlamadasLeerColumna { get; private set; }
@@ -24,16 +24,16 @@ public class SyncCoordinatorTests
             return Task.FromResult(ModifiedTime);
         }
 
-        public Task<IReadOnlyDictionary<int, string>> LeerColumnaAsync(CancellationToken ct)
+        public Task<IReadOnlyDictionary<int, FilaCruda>> LeerFilasAsync(CancellationToken ct)
         {
             LlamadasLeerColumna++;
-            return Task.FromResult<IReadOnlyDictionary<int, string>>(
-                new Dictionary<int, string>(Valores));
+            return Task.FromResult<IReadOnlyDictionary<int, FilaCruda>>(
+                new Dictionary<int, FilaCruda>(Valores));
         }
     }
 
     private static (SyncCoordinator coordinator, FakeSheetSource source, SheetCache cache) Crear(
-        Dictionary<int, string> valoresIniciales)
+        Dictionary<int, FilaCruda> valoresIniciales)
     {
         var source = new FakeSheetSource { Valores = valoresIniciales };
         var parser = new RowParser(Options.Create(new ParsingOptions()), NullLogger<RowParser>.Instance);
@@ -47,12 +47,15 @@ public class SyncCoordinatorTests
         return (coordinator, source, cache);
     }
 
-    private static Dictionary<int, string> TresFilas() => new()
+    private static Dictionary<int, FilaCruda> TresFilas() => new()
     {
-        [2] = "644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO",
-        [3] = "12/2025 PRIMER COLEGIADO DEL SEGUNDO CIRCUITO",
-        [4] = "99/2024 QUINTO COLEGIADO DEL TERCER CIRCUITO"
+        [2] = FilaCruda.Simple("644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO"),
+        [3] = FilaCruda.Simple("12/2025 PRIMER COLEGIADO DEL SEGUNDO CIRCUITO"),
+        [4] = FilaCruda.Simple("99/2024 QUINTO COLEGIADO DEL TERCER CIRCUITO")
     };
+
+    private static FilaCruda ConNombre(string valor, string nombre) =>
+        new(valor, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["nombre"] = nombre });
 
     [Fact]
     public async Task Primera_sync_parsea_todo()
@@ -91,7 +94,7 @@ public class SyncCoordinatorTests
         await coordinator.SyncAsync(false, CancellationToken.None);
 
         // Se edita una sola fila y avanza modifiedTime.
-        source.Valores[3] = "13/2025 PRIMER COLEGIADO DEL SEGUNDO CIRCUITO";
+        source.Valores[3] = FilaCruda.Simple("13/2025 PRIMER COLEGIADO DEL SEGUNDO CIRCUITO");
         source.ModifiedTime = source.ModifiedTime!.Value.AddMinutes(1);
 
         var segunda = await coordinator.SyncAsync(false, CancellationToken.None);
@@ -121,7 +124,7 @@ public class SyncCoordinatorTests
     public async Task Una_fila_que_no_matchea_no_impide_parsear_el_resto()
     {
         var valores = TresFilas();
-        valores[5] = "texto sin formato";
+        valores[5] = FilaCruda.Simple("texto sin formato");
         var (coordinator, _, cache) = Crear(valores);
 
         var resultado = await coordinator.SyncAsync(false, CancellationToken.None);
@@ -129,6 +132,44 @@ public class SyncCoordinatorTests
         Assert.Equal(3, resultado.TotalRegistros);
         Assert.Equal(1, resultado.TotalErroresParseo);
         Assert.Equal(5, cache.Actual.ErroresParseo.Single().Fila);
+    }
+
+    [Fact]
+    public async Task Una_columna_extra_editada_invalida_la_fila()
+    {
+        var valores = TresFilas();
+        valores[2] = ConNombre("644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO", "JUAN PEREZ");
+        var (coordinator, source, cache) = Crear(valores);
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        // Cambia solo el nombre: la columna principal es idéntica, pero la fila debe reparsearse.
+        source.Valores[2] = ConNombre("644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO", "ANA LOPEZ");
+        source.ModifiedTime = source.ModifiedTime!.Value.AddMinutes(1);
+
+        var segunda = await coordinator.SyncAsync(false, CancellationToken.None);
+
+        Assert.Equal(1, segunda.FilasReparseadas);
+        Assert.Equal(2, segunda.FilasReutilizadas);
+        Assert.Equal("ANA LOPEZ", cache.Actual.Registros.Single(r => r.Fila == 2).Campos.Grupos["nombre"]);
+    }
+
+    [Fact]
+    public async Task Una_fila_sin_circuito_cae_en_el_patron_laxo_en_vez_de_ir_a_errores()
+    {
+        var valores = TresFilas();
+        valores[5] = FilaCruda.Simple("777/2026 SEGUNDO TRIBUNAL UNITARIO");
+        var (coordinator, _, cache) = Crear(valores);
+
+        var resultado = await coordinator.SyncAsync(false, CancellationToken.None);
+
+        Assert.Equal(4, resultado.TotalRegistros);
+        Assert.Equal(0, resultado.TotalErroresParseo);
+
+        var registro = cache.Actual.Registros.Single(r => r.Fila == 5);
+        Assert.Equal(1, registro.PatronUsado); // el segundo patrón, el de respaldo
+        Assert.Equal("777/2026", registro.Campos.Consecutivo);
+        Assert.Equal("SEGUNDO TRIBUNAL UNITARIO", registro.Campos.Colegio);
+        Assert.Equal(string.Empty, registro.Campos.Circuito);
     }
 
     [Fact]

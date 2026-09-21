@@ -7,8 +7,8 @@
         x:DataType="vm:MainViewModel"
         x:CompileBindings="True"
         Title="Generador de documentos"
-        Width="1080" Height="720"
-        MinWidth="820" MinHeight="560"
+        Width="1140" Height="760"
+        MinWidth="880" MinHeight="600"
         Background="{DynamicResource SuperficieFondo}">
 
   <Grid RowDefinitions="Auto,Auto,*">
@@ -65,6 +65,60 @@
         </StackPanel>
       </Border>
 
+      <!-- Datos del abogado: locales al equipo, iguales para todos los documentos -->
+      <Expander IsExpanded="{Binding AbogadoExpandido, Mode=TwoWay}"
+                HorizontalAlignment="Stretch">
+        <Expander.Header>
+          <StackPanel Spacing="1">
+            <TextBlock Classes="etiqueta" Text="DATOS DEL ABOGADO" />
+            <TextBlock Classes="subtitulo" Text="{Binding ResumenAbogado}" />
+          </StackPanel>
+        </Expander.Header>
+
+        <StackPanel Spacing="12" Margin="0,6,0,0">
+          <Grid ColumnDefinitions="*,12,*,12,*">
+            <StackPanel Grid.Column="0" Spacing="4">
+              <TextBlock Classes="etiqueta" Text="NOMBRE" />
+              <TextBox Watermark="Nombre completo"
+                       Text="{Binding AbogadoNombre, Mode=TwoWay}" />
+              <TextBlock Classes="subtitulo"
+                         FontFamily="Consolas,Menlo,monospace"
+                         Text="{}{{abogadoNombre}}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Spacing="4">
+              <TextBlock Classes="etiqueta" Text="USUARIO FIREL" />
+              <TextBox Watermark="Usuario FIREL"
+                       Text="{Binding AbogadoFirel, Mode=TwoWay}" />
+              <TextBlock Classes="subtitulo"
+                         FontFamily="Consolas,Menlo,monospace"
+                         Text="{}{{abogadoFirel}}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="4" Spacing="4">
+              <TextBlock Classes="etiqueta" Text="CÉDULA PROFESIONAL" />
+              <TextBox Watermark="Número de cédula"
+                       Text="{Binding AbogadoCedula, Mode=TwoWay}" />
+              <TextBlock Classes="subtitulo"
+                         FontFamily="Consolas,Menlo,monospace"
+                         Text="{}{{abogadoCedula}}" />
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Button Content="Guardar datos" Command="{Binding GuardarAbogadoCommand}" />
+            <TextBlock Classes="subtitulo"
+                       VerticalAlignment="Center"
+                       Text="{Binding MensajeAbogado}"
+                       IsVisible="{Binding MensajeAbogado, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+
+          <TextBlock Classes="subtitulo"
+                     TextWrapping="Wrap"
+                     Text="Se guardan solo en este equipo y se aplican a todos los documentos que generes." />
+        </StackPanel>
+      </Expander>
+
       <!-- Sin conexión: solo lectura -->
       <Border Classes="banner"
               Background="{DynamicResource AvisoFondo}"
@@ -86,37 +140,80 @@
     </StackPanel>
 
     <!-- Contenido -->
-    <Grid Grid.Row="2" Margin="20,14,20,20" ColumnDefinitions="320,14,*">
+    <Grid Grid.Row="2" Margin="20,14,20,20" ColumnDefinitions="380,14,*">
 
       <!-- Lista de registros -->
       <Border Grid.Column="0" Classes="panel">
-        <Grid RowDefinitions="Auto,*,Auto">
-          <TextBlock Grid.Row="0" Classes="etiqueta" Margin="14,12,14,8" Text="REGISTROS" />
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-          <ListBox Grid.Row="1"
+          <StackPanel Grid.Row="0" Spacing="8" Margin="14,12,14,8">
+            <TextBlock Classes="etiqueta" Text="REGISTROS" />
+            <TextBox Watermark="Filtrar por texto, nombre o fila…"
+                     Text="{Binding Filtro, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Selección masiva -->
+          <Border Grid.Row="1"
+                  Background="{DynamicResource SuperficieFondo}"
+                  BorderBrush="{DynamicResource Borde}"
+                  BorderThickness="0,1,0,1"
+                  Padding="14,8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <CheckBox Grid.Column="0"
+                        IsThreeState="True"
+                        IsChecked="{Binding TodosMarcados, Mode=TwoWay}"
+                        ToolTip.Tip="Marca o desmarca todos los registros visibles con el filtro actual">
+                <TextBlock Classes="subtitulo" Text="Seleccionar todos" VerticalAlignment="Center" />
+              </CheckBox>
+
+              <TextBlock Grid.Column="1"
+                         Classes="subtitulo"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center"
+                         Margin="8,0">
+                <Run Text="{Binding TotalMarcados}" />
+                <Run Text="marcado(s)" />
+              </TextBlock>
+
+              <Button Grid.Column="2"
+                      Content="Limpiar"
+                      Padding="10,4"
+                      FontSize="12"
+                      Command="{Binding DesmarcarTodosCommand}"
+                      IsEnabled="{Binding HayMarcados}" />
+            </Grid>
+          </Border>
+
+          <ListBox Grid.Row="2"
                    Background="Transparent"
                    BorderThickness="0"
                    ItemsSource="{Binding Registros}"
                    SelectedItem="{Binding RegistroSeleccionado, Mode=TwoWay}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:RecordDetailViewModel">
-                <StackPanel Spacing="2" Margin="0,3">
-                  <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Classes="subtitulo" Text="{Binding Subtitulo}" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
+                <Grid ColumnDefinitions="Auto,*" Margin="0,3">
+                  <CheckBox Grid.Column="0"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            IsChecked="{Binding Marcado, Mode=TwoWay}" />
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="subtitulo" Text="{Binding Subtitulo}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
 
           <!-- Filas con error de parseo: informativo, no bloquea -->
-          <Expander Grid.Row="2"
+          <Expander Grid.Row="3"
                     Margin="10"
                     IsVisible="{Binding HayErroresParseo}"
                     Background="{DynamicResource PeligroFondo}">
             <Expander.Header>
               <TextBlock Foreground="{DynamicResource Peligro}" FontSize="12">
                 <Run Text="{Binding TotalErroresParseo}" />
-                <Run Text="fila(s) sin coincidencia con el patrón" />
+                <Run Text="fila(s) sin coincidencia con ningún patrón" />
               </TextBlock>
             </Expander.Header>
             <ScrollViewer MaxHeight="180">
@@ -159,14 +256,29 @@
                                     IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).HayRegistroSeleccionado}" />
           </Panel>
 
-          <Button Grid.Row="1"
-                  Margin="0,16,0,0"
-                  HorizontalAlignment="Right"
-                  Padding="18,9"
-                  Content="Generar documento"
-                  Background="{DynamicResource Acento}"
-                  Foreground="White"
-                  Command="{Binding GenerarDocumentoCommand}" />
+          <Grid Grid.Row="1" Margin="0,16,0,0" ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Grid.Column="0"
+                       Classes="subtitulo"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{Binding ProgresoTexto}"
+                       IsVisible="{Binding Generando}" />
+
+            <Button Grid.Column="1"
+                    Margin="0,0,10,0"
+                    Padding="18,9"
+                    Content="Generar este"
+                    Command="{Binding GenerarDocumentoCommand}"
+                    IsEnabled="{Binding !Generando}" />
+
+            <Button Grid.Column="2"
+                    Padding="18,9"
+                    Content="{Binding TextoBotonMasivo}"
+                    Background="{DynamicResource Acento}"
+                    Foreground="White"
+                    Command="{Binding GenerarSeleccionadosCommand}"
+                    IsEnabled="{Binding !Generando}" />
+          </Grid>
 
         </Grid>
       </Border>
