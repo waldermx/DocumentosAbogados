@@ -1,0 +1,83 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DocGenApp.App"
+             RequestedThemeVariant="Default">
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="SuperficieFondo" Color="#F6F7F9" />
+          <SolidColorBrush x:Key="SuperficiePanel" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="Borde" Color="#DFE3E8" />
+          <SolidColorBrush x:Key="TextoPrimario" Color="#1B1F24" />
+          <SolidColorBrush x:Key="TextoSecundario" Color="#5C6670" />
+          <SolidColorBrush x:Key="Acento" Color="#2B5CE6" />
+          <SolidColorBrush x:Key="Exito" Color="#1B7F4B" />
+          <SolidColorBrush x:Key="ExitoFondo" Color="#E6F4EC" />
+          <SolidColorBrush x:Key="Aviso" Color="#9A6400" />
+          <SolidColorBrush x:Key="AvisoFondo" Color="#FFF6E0" />
+          <SolidColorBrush x:Key="Peligro" Color="#B3261E" />
+          <SolidColorBrush x:Key="PeligroFondo" Color="#FDECEA" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="SuperficieFondo" Color="#14171A" />
+          <SolidColorBrush x:Key="SuperficiePanel" Color="#1D2125" />
+          <SolidColorBrush x:Key="Borde" Color="#31373D" />
+          <SolidColorBrush x:Key="TextoPrimario" Color="#EDEFF2" />
+          <SolidColorBrush x:Key="TextoSecundario" Color="#9AA4AE" />
+          <SolidColorBrush x:Key="Acento" Color="#7AA2FF" />
+          <SolidColorBrush x:Key="Exito" Color="#6FD79B" />
+          <SolidColorBrush x:Key="ExitoFondo" Color="#17301F" />
+          <SolidColorBrush x:Key="Aviso" Color="#E8B44A" />
+          <SolidColorBrush x:Key="AvisoFondo" Color="#3A2E12" />
+          <SolidColorBrush x:Key="Peligro" Color="#F2857C" />
+          <SolidColorBrush x:Key="PeligroFondo" Color="#3A1D1A" />
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="TextBlock.titulo">
+      <Setter Property="FontSize" Value="19" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextoPrimario}" />
+    </Style>
+
+    <Style Selector="TextBlock.subtitulo">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextoSecundario}" />
+    </Style>
+
+    <Style Selector="TextBlock.etiqueta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextoSecundario}" />
+    </Style>
+
+    <Style Selector="TextBlock.valor">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource TextoPrimario}" />
+    </Style>
+
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{DynamicResource SuperficiePanel}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Borde}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style Selector="Border.banner">
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,9" />
+    </Style>
+  </Application.Styles>
+
+</Application>

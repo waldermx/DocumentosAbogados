@@ -1,0 +1,27 @@
+## .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userprefs
+.vs/
+.vscode/
+.idea/
+artifacts/
+
+## Credenciales y secretos — nunca se versionan
+*.credentials.json
+service-account*.json
+google-credentials*.json
+appsettings.*.Local.json
+.env
+.env.*
+!.env.example
+
+## Salida de la app
+cache.json
+*.docx.bak

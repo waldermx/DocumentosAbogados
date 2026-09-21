@@ -1,0 +1,177 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:DocGenApp.ViewModels"
+        xmlns:models="clr-namespace:DocGenApp.Models"
+        xmlns:views="clr-namespace:DocGenApp.Views"
+        x:Class="DocGenApp.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        x:CompileBindings="True"
+        Title="Generador de documentos"
+        Width="1080" Height="720"
+        MinWidth="820" MinHeight="560"
+        Background="{DynamicResource SuperficieFondo}">
+
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- Barra superior -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource SuperficiePanel}"
+            BorderBrush="{DynamicResource Borde}"
+            BorderThickness="0,0,0,1"
+            Padding="20,14">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="2">
+          <TextBlock Classes="titulo" Text="Generador de documentos" />
+          <TextBlock Classes="subtitulo" Text="{Binding MensajeEstado}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Classes="subtitulo"
+                     VerticalAlignment="Center"
+                     Text="{Binding UltimaSyncTexto}"
+                     IsVisible="{Binding UltimaSyncTexto, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Button Content="Actualizar"
+                  Command="{Binding RefrescarCommand}"
+                  IsEnabled="{Binding !EstaOcupado}" />
+          <Button Content="Cambiar password"
+                  Command="{Binding OlvidarPasswordCommand}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Avisos -->
+    <StackPanel Grid.Row="1" Margin="20,14,20,0" Spacing="10">
+
+      <!-- Password maestra -->
+      <Border Classes="panel banner"
+              Background="{DynamicResource SuperficiePanel}"
+              BorderBrush="{DynamicResource Acento}"
+              IsVisible="{Binding PidePassword}">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="etiqueta" Text="PASSWORD MAESTRA" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0"
+                     Margin="0,0,10,0"
+                     PasswordChar="•"
+                     Watermark="Password del servidor"
+                     Text="{Binding PasswordIngresada, Mode=TwoWay}" />
+            <Button Grid.Column="1"
+                    Content="Conectar"
+                    IsDefault="True"
+                    Command="{Binding ConfirmarPasswordCommand}" />
+          </Grid>
+          <TextBlock Classes="subtitulo"
+                     Text="Se guarda cifrada con DPAPI en tu perfil de Windows; nunca en texto plano." />
+        </StackPanel>
+      </Border>
+
+      <!-- Sin conexión: solo lectura -->
+      <Border Classes="banner"
+              Background="{DynamicResource AvisoFondo}"
+              IsVisible="{Binding EsSoloLectura}">
+        <TextBlock Foreground="{DynamicResource Aviso}"
+                   TextWrapping="Wrap"
+                   Text="{Binding MensajeEstado}" />
+      </Border>
+
+      <!-- Éxito al generar -->
+      <Border Classes="banner"
+              Background="{DynamicResource ExitoFondo}"
+              IsVisible="{Binding MensajeExito, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Foreground="{DynamicResource Exito}"
+                   TextWrapping="Wrap"
+                   Text="{Binding MensajeExito}" />
+      </Border>
+
+    </StackPanel>
+
+    <!-- Contenido -->
+    <Grid Grid.Row="2" Margin="20,14,20,20" ColumnDefinitions="320,14,*">
+
+      <!-- Lista de registros -->
+      <Border Grid.Column="0" Classes="panel">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <TextBlock Grid.Row="0" Classes="etiqueta" Margin="14,12,14,8" Text="REGISTROS" />
+
+          <ListBox Grid.Row="1"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   ItemsSource="{Binding Registros}"
+                   SelectedItem="{Binding RegistroSeleccionado, Mode=TwoWay}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:RecordDetailViewModel">
+                <StackPanel Spacing="2" Margin="0,3">
+                  <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="subtitulo" Text="{Binding Subtitulo}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- Filas con error de parseo: informativo, no bloquea -->
+          <Expander Grid.Row="2"
+                    Margin="10"
+                    IsVisible="{Binding HayErroresParseo}"
+                    Background="{DynamicResource PeligroFondo}">
+            <Expander.Header>
+              <TextBlock Foreground="{DynamicResource Peligro}" FontSize="12">
+                <Run Text="{Binding TotalErroresParseo}" />
+                <Run Text="fila(s) sin coincidencia con el patrón" />
+              </TextBlock>
+            </Expander.Header>
+            <ScrollViewer MaxHeight="180">
+              <ItemsControl ItemsSource="{Binding ErroresParseo}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:ErrorParseoDto">
+                    <StackPanel Spacing="1" Margin="0,0,0,8">
+                      <TextBlock Classes="etiqueta">
+                        <Run Text="FILA" />
+                        <Run Text="{Binding Fila}" />
+                      </TextBlock>
+                      <TextBlock Classes="subtitulo" TextWrapping="Wrap" Text="{Binding ValorCrudo}" />
+                      <TextBlock Classes="subtitulo"
+                                 FontStyle="Italic"
+                                 TextWrapping="Wrap"
+                                 Text="{Binding Motivo}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Expander>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
+
+      <!-- Detalle -->
+      <Border Grid.Column="2" Classes="panel" Padding="18">
+        <Grid RowDefinitions="*,Auto">
+
+          <Panel Grid.Row="0">
+            <TextBlock Classes="subtitulo"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Text="Selecciona un registro de la lista."
+                       IsVisible="{Binding !HayRegistroSeleccionado}" />
+
+            <views:RecordDetailView DataContext="{Binding RegistroSeleccionado}"
+                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).HayRegistroSeleccionado}" />
+          </Panel>
+
+          <Button Grid.Row="1"
+                  Margin="0,16,0,0"
+                  HorizontalAlignment="Right"
+                  Padding="18,9"
+                  Content="Generar documento"
+                  Background="{DynamicResource Acento}"
+                  Foreground="White"
+                  Command="{Binding GenerarDocumentoCommand}" />
+
+        </Grid>
+      </Border>
+
+    </Grid>
+  </Grid>
+
+</Window>

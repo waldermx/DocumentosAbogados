@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/client/">
+    <Project Path="client/DocGenApp.Tests/DocGenApp.Tests.csproj" />
+    <Project Path="client/DocGenApp/DocGenApp.csproj" />
+  </Folder>
+  <Folder Name="/server/">
+    <Project Path="server/DocApi.Tests/DocApi.Tests.csproj" />
+    <Project Path="server/DocApi/DocApi.csproj" />
+  </Folder>
+</Solution>
