@@ -20,7 +20,7 @@ El cliente nunca ve credenciales de Google: solo conoce la URL del servidor y la
 
 ```bash
 dotnet build          # compila los 4 proyectos
-dotnet test           # 42 tests
+dotnet test           # 62 tests
 ```
 
 ### Servidor
@@ -168,9 +168,13 @@ dotnet run --project client/DocGenApp -- --crear-plantilla
 
 ### Datos del abogado
 
-Nombre, usuario FIREL y cédula profesional **no vienen de la hoja**: son los mismos para todos los documentos, así que se capturan una vez en el panel «Datos del abogado» de la app y se guardan en `%LOCALAPPDATA%\DocGenApp\abogado.json`.
+Nombre, usuario FIREL y cédula profesional **no vienen de la hoja**: se capturan en la app y se guardan en `%LOCALAPPDATA%\DocGenApp\abogados.json`.
 
-Van en claro a propósito: son datos identificativos, no credenciales — la password maestra sigue siendo lo único cifrado con DPAPI. Si falta alguno, el documento se genera igual y el marcador correspondiente queda visible, como cualquier otro campo sin valor.
+Se puede dar de alta **más de un abogado** (un despacho con varios). El panel «Datos del abogado» tiene un selector: «+ Agregar abogado» crea uno nuevo y lo deja activo para editarlo, «Eliminar» borra el que está activo. El abogado **seleccionado en el selector** es el que se usa al generar documentos, tanto uno solo como en el lote masivo — no hay forma de mezclar dos abogados en una misma generación. Qué abogado estaba activo se recuerda entre arranques.
+
+Van en claro a propósito: son datos identificativos, no credenciales — la password maestra sigue siendo lo único cifrado con DPAPI. Si no hay ningún abogado seleccionado (o falta algún campo), el documento se genera igual y los marcadores `{{abogadoNombre}}`, `{{abogadoFirel}}`, `{{abogadoCedula}}` quedan visibles, como cualquier otro campo sin valor.
+
+El archivo de una sola versión anterior a este cambio (`abogado.json`, un único abogado) se migra automáticamente la primera vez que arranca la app nueva: se envuelve en una lista de un elemento y queda seleccionado. El archivo viejo no se borra.
 
 ### Generación masiva
 
