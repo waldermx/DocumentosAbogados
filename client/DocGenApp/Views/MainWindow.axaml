@@ -65,7 +65,8 @@
         </StackPanel>
       </Border>
 
-      <!-- Datos del abogado: locales al equipo, iguales para todos los documentos -->
+      <!-- Datos del abogado: locales al equipo. Puede haber varios; el seleccionado
+           en el combo es el que se aplica a los documentos que se generen. -->
       <Expander IsExpanded="{Binding AbogadoExpandido, Mode=TwoWay}"
                 HorizontalAlignment="Stretch">
         <Expander.Header>
@@ -76,11 +77,40 @@
         </Expander.Header>
 
         <StackPanel Spacing="12" Margin="0,6,0,0">
-          <Grid ColumnDefinitions="*,12,*,12,*">
+
+          <!-- Selector: qué abogado firma los próximos documentos -->
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <ComboBox Grid.Column="0"
+                      HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding Abogados}"
+                      SelectedItem="{Binding AbogadoSeleccionado, Mode=TwoWay}"
+                      PlaceholderText="Ningún abogado capturado todavía">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="models:DatosAbogado">
+                  <TextBlock Text="{Binding EtiquetaCorta}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <Button Grid.Column="1"
+                    Margin="8,0,0,0"
+                    Content="+ Agregar abogado"
+                    Command="{Binding AgregarAbogadoCommand}" />
+
+            <Button Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Content="Eliminar"
+                    Command="{Binding EliminarAbogadoCommand}"
+                    IsEnabled="{Binding HayAbogadoSeleccionado}" />
+          </Grid>
+
+          <!-- Formulario del abogado activo -->
+          <Grid ColumnDefinitions="*,12,*,12,*"
+                IsEnabled="{Binding HayAbogadoSeleccionado}">
             <StackPanel Grid.Column="0" Spacing="4">
               <TextBlock Classes="etiqueta" Text="NOMBRE" />
               <TextBox Watermark="Nombre completo"
-                       Text="{Binding AbogadoNombre, Mode=TwoWay}" />
+                       Text="{Binding AbogadoSeleccionado.Nombre, Mode=TwoWay}" />
               <TextBlock Classes="subtitulo"
                          FontFamily="Consolas,Menlo,monospace"
                          Text="{}{{abogadoNombre}}" />
@@ -89,7 +119,7 @@
             <StackPanel Grid.Column="2" Spacing="4">
               <TextBlock Classes="etiqueta" Text="USUARIO FIREL" />
               <TextBox Watermark="Usuario FIREL"
-                       Text="{Binding AbogadoFirel, Mode=TwoWay}" />
+                       Text="{Binding AbogadoSeleccionado.UsuarioFirel, Mode=TwoWay}" />
               <TextBlock Classes="subtitulo"
                          FontFamily="Consolas,Menlo,monospace"
                          Text="{}{{abogadoFirel}}" />
@@ -98,7 +128,7 @@
             <StackPanel Grid.Column="4" Spacing="4">
               <TextBlock Classes="etiqueta" Text="CÉDULA PROFESIONAL" />
               <TextBox Watermark="Número de cédula"
-                       Text="{Binding AbogadoCedula, Mode=TwoWay}" />
+                       Text="{Binding AbogadoSeleccionado.CedulaProfesional, Mode=TwoWay}" />
               <TextBlock Classes="subtitulo"
                          FontFamily="Consolas,Menlo,monospace"
                          Text="{}{{abogadoCedula}}" />
@@ -106,7 +136,8 @@
           </Grid>
 
           <StackPanel Orientation="Horizontal" Spacing="12">
-            <Button Content="Guardar datos" Command="{Binding GuardarAbogadoCommand}" />
+            <Button Content="Guardar datos"
+                    Command="{Binding GuardarAbogadosCommand}" />
             <TextBlock Classes="subtitulo"
                        VerticalAlignment="Center"
                        Text="{Binding MensajeAbogado}"
@@ -115,7 +146,7 @@
 
           <TextBlock Classes="subtitulo"
                      TextWrapping="Wrap"
-                     Text="Se guardan solo en este equipo y se aplican a todos los documentos que generes." />
+                     Text="Se guardan solo en este equipo. Los documentos que generes — uno o en lote — usan el abogado seleccionado arriba." />
         </StackPanel>
       </Expander>
 

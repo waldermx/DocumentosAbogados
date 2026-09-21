@@ -52,11 +52,12 @@ public sealed partial class MainViewModel : ViewModelBase
         _generador = generador;
         _settings = settings;
 
-        var abogado = _abogadoStore.Cargar();
-        _abogadoNombre = abogado.Nombre;
-        _abogadoFirel = abogado.UsuarioFirel;
-        _abogadoCedula = abogado.CedulaProfesional;
-        _abogadoExpandido = !abogado.EstaCompleto;
+        var persistido = _abogadoStore.Cargar();
+        _abogados = new ObservableCollection<DatosAbogado>(persistido.Abogados);
+        _abogadoSeleccionado = persistido.SeleccionadoId is { } id
+            ? _abogados.FirstOrDefault(a => a.Id == id) ?? _abogados.FirstOrDefault()
+            : _abogados.FirstOrDefault();
+        _abogadoExpandido = _abogadoSeleccionado is null || !_abogadoSeleccionado.EstaCompleto;
     }
 
     [ObservableProperty]
@@ -100,18 +101,18 @@ public sealed partial class MainViewModel : ViewModelBase
     partial void OnEstadoChanged(EstadoApp value) => OnPropertyChanged(nameof(PidePassword));
 
     // ---------------------------------------------------------------- Datos del abogado
+    //
+    // Un despacho puede tener varios abogados; se guardan todos y uno queda "activo"
+    // (el seleccionado en el combo), que es el que se usa al generar documentos —
+    // tanto uno solo como en el lote masivo.
+
+    [ObservableProperty]
+    private ObservableCollection<DatosAbogado> _abogados;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
-    private string _abogadoNombre;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
-    private string _abogadoFirel;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResumenAbogado))]
-    private string _abogadoCedula;
+    [NotifyCanExecuteChangedFor(nameof(EliminarAbogadoCommand))]
+    private DatosAbogado? _abogadoSeleccionado;
 
     [ObservableProperty]
     private bool _abogadoExpandido;
@@ -119,39 +120,86 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeAbogado;
 
+    public bool HayAbogadoSeleccionado => AbogadoSeleccionado is not null;
+
     public string ResumenAbogado
     {
         get
         {
-            var datos = DatosAbogadoActuales();
+            if (Abogados.Count == 0)
+            {
+                return "No hay ningún abogado capturado — se dejarán los marcadores sin sustituir.";
+            }
+
+            var datos = AbogadoSeleccionado;
+            if (datos is null)
+            {
+                return $"{Abogados.Count} abogado(s) guardado(s), ninguno seleccionado para generar.";
+            }
+
             if (!datos.EstaCompleto)
             {
-                return "Faltan datos del abogado — se dejarán los marcadores sin sustituir.";
+                return $"{datos.EtiquetaCorta} — faltan datos, se dejarán los marcadores sin sustituir.";
             }
 
             return $"{datos.Nombre} · FIREL {datos.UsuarioFirel} · Céd. {datos.CedulaProfesional}";
         }
     }
 
-    private DatosAbogado DatosAbogadoActuales() => new()
-    {
-        Nombre = AbogadoNombre,
-        UsuarioFirel = AbogadoFirel,
-        CedulaProfesional = AbogadoCedula
-    };
+    partial void OnAbogadoSeleccionadoChanged(DatosAbogado? value) => OnPropertyChanged(nameof(HayAbogadoSeleccionado));
+
+    /// <summary>El abogado activo, o uno vacío si no hay ninguno: los marcadores quedan
+    /// sin valor en vez de que la generación reviente por falta de datos.</summary>
+    private DatosAbogado AbogadoParaGenerar() => AbogadoSeleccionado ?? new DatosAbogado();
 
     [RelayCommand]
-    private void GuardarAbogado()
+    private void AgregarAbogado()
     {
-        var datos = DatosAbogadoActuales();
+        var nuevo = new DatosAbogado();
+        Abogados.Add(nuevo);
+        AbogadoSeleccionado = nuevo;
+        AbogadoExpandido = true;
+        MensajeAbogado = null;
+    }
 
+    [RelayCommand(CanExecute = nameof(HayAbogadoSeleccionado))]
+    private void EliminarAbogado()
+    {
+        var actual = AbogadoSeleccionado;
+        if (actual is null)
+        {
+            return;
+        }
+
+        var indice = Abogados.IndexOf(actual);
+        Abogados.Remove(actual);
+
+        // Se queda mirando "al mismo sitio": el que ocupó la posición, o el anterior si era el último.
+        AbogadoSeleccionado = Abogados.Count == 0
+            ? null
+            : Abogados[Math.Min(indice, Abogados.Count - 1)];
+
+        GuardarAbogados();
+    }
+
+    [RelayCommand]
+    private void GuardarAbogados()
+    {
         try
         {
-            _abogadoStore.Guardar(datos);
-            MensajeAbogado = datos.EstaCompleto
-                ? "Datos guardados en este equipo."
-                : "Datos guardados, pero hay campos vacíos.";
-            AbogadoExpandido = !datos.EstaCompleto;
+            _abogadoStore.Guardar(new AbogadosPersistidos
+            {
+                Abogados = Abogados.ToList(),
+                SeleccionadoId = AbogadoSeleccionado?.Id
+            });
+
+            MensajeAbogado = Abogados.Count == 0
+                ? "Sin abogados guardados."
+                : AbogadoSeleccionado?.EstaCompleto == true
+                    ? "Datos guardados en este equipo."
+                    : "Datos guardados, pero hay campos vacíos.";
+
+            AbogadoExpandido = AbogadoSeleccionado is null || !AbogadoSeleccionado.EstaCompleto;
         }
         catch (Exception ex)
         {
@@ -452,7 +500,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 return; // el usuario canceló
             }
 
-            var faltantes = _generador.Generar(RutaPlantilla(), registro.ValoresParaPlantilla(DatosAbogadoActuales()), destino);
+            var faltantes = _generador.Generar(RutaPlantilla(), registro.ValoresParaPlantilla(AbogadoParaGenerar()), destino);
 
             MensajeExito = faltantes.Count == 0
                 ? $"Documento generado: {destino}"
@@ -487,7 +535,7 @@ public sealed partial class MainViewModel : ViewModelBase
         }
 
         var plantilla = RutaPlantilla();
-        var abogado = DatosAbogadoActuales();
+        var abogado = AbogadoParaGenerar();
 
         Generando = true;
         var generados = 0;

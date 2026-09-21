@@ -33,7 +33,41 @@ public sealed class TextoTolerante : JsonConverter<string>
 /// <summary>Espejo de los DTOs del servidor. Se mantienen deliberadamente simples y tolerantes.</summary>
 public sealed class ParsedFields
 {
-    public Dictionary<string, string> Grupos { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string> _grupos = NuevoDiccionario();
+
+    /// <summary>
+    /// Los campos del registro, indexados sin distinguir mayúsculas: el nombre de una
+    /// columna extra lo escribe quien configura el servidor (<c>NOMBRE</c>, <c>Nombre</c>,
+    /// <c>nombre</c>) y el cliente tiene que encontrarlo igual.
+    ///
+    /// El setter reconstruye el diccionario porque System.Text.Json crea uno nuevo con el
+    /// comparador por defecto al deserializar, descartando el que trae el valor inicial.
+    /// </summary>
+    public Dictionary<string, string> Grupos
+    {
+        get => _grupos;
+        set => _grupos = Normalizar(value);
+    }
+
+    private static Dictionary<string, string> NuevoDiccionario() => new(StringComparer.OrdinalIgnoreCase);
+
+    private static Dictionary<string, string> Normalizar(Dictionary<string, string>? origen)
+    {
+        var destino = NuevoDiccionario();
+        if (origen is null)
+        {
+            return destino;
+        }
+
+        // Copia tolerante: dos claves que solo difieran en mayúsculas no deben lanzar
+        // (gana la primera) — un caché en disco editado a mano no puede tumbar la app.
+        foreach (var (clave, valor) in origen)
+        {
+            destino.TryAdd(clave, valor);
+        }
+
+        return destino;
+    }
 
     public string Consecutivo => Obtener("consecutivo");
     public string Colegio => Obtener("colegio");

@@ -46,6 +46,25 @@ public class SyncResultDtoTests
     }
 
     [Fact]
+    public void Los_campos_se_leen_sin_importar_las_mayusculas_del_nombre_de_columna()
+    {
+        // La columna extra se configura con un nombre libre ("NOMBRE", "Nombre", "nombre").
+        // El registro debe encontrarla igual, o el panel se queda sin nombre según
+        // cómo esté escrita la variable de entorno del servidor.
+        var payload = JsonSerializer.Deserialize<RegistrosResponseDto>(
+            """
+            {"registros":[{"fila":2,"valorCrudo":"133/2025 CUARTO COLEGIADO",
+              "campos":{"grupos":{"CONSECUTIVO":"133/2025","NOMBRE":"JUAN PEREZ"}}}],
+             "erroresParseo":[],"ultimaSync":null}
+            """, Opts)!;
+
+        var campos = payload.Registros[0].Campos;
+
+        Assert.Equal("JUAN PEREZ", campos.Nombre);
+        Assert.Equal("133/2025", campos.Consecutivo);
+    }
+
+    [Fact]
     public void El_resto_del_payload_se_lee_igual_venga_como_venga_el_enum()
     {
         var dto = Deserializar(

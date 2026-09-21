@@ -7,7 +7,28 @@ namespace DocApi.Models;
 /// </summary>
 public sealed class ParsedFields
 {
-    public required IReadOnlyDictionary<string, string> Grupos { get; init; }
+    private readonly IReadOnlyDictionary<string, string> _grupos = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Indexado sin distinguir mayúsculas. El <c>init</c> reconstruye el diccionario porque
+    /// al restaurar el caché desde disco System.Text.Json crea uno con el comparador por
+    /// defecto, y el nombre de una columna extra lo escribe quien configura el servidor.
+    /// </summary>
+    public required IReadOnlyDictionary<string, string> Grupos
+    {
+        get => _grupos;
+        init
+        {
+            var destino = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (clave, valor) in value ?? (IReadOnlyDictionary<string, string>)destino)
+            {
+                // Gana la primera: un caché corrupto con claves duplicadas no debe lanzar.
+                destino.TryAdd(clave, valor);
+            }
+
+            _grupos = destino;
+        }
+    }
 
     /// <summary>Atajos para los grupos del regex por defecto; vacíos si el patrón configurado no los define.</summary>
     public string Consecutivo => Obtener("consecutivo");
