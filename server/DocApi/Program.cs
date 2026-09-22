@@ -22,6 +22,7 @@ builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOpt
 // --- Servicios ---
 builder.Services.AddSingleton<RowParser>();
 builder.Services.AddSingleton<SheetCache>();
+builder.Services.AddSingleton<ImpresosStore>();
 
 // Sin credenciales configuradas la app igual arranca: /sync responde con un error explicativo
 // en vez de impedir levantar el servidor.

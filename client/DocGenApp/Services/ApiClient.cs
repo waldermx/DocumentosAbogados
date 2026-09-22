@@ -38,6 +38,12 @@ public sealed class ApiClient : IDisposable
     public Task<ApiResult<SyncResultDto>> PostSyncAsync(CancellationToken ct) =>
         EnviarAsync<SyncResultDto>(HttpMethod.Post, "sync?forzar=true", ct);
 
+    public Task<ApiResult<ImpresoEstadoDto>> PostMarcarImpresoAsync(int fila, CancellationToken ct) =>
+        EnviarAsync<ImpresoEstadoDto>(HttpMethod.Post, $"registros/{fila}/impreso", ct);
+
+    public Task<ApiResult<ImpresoEstadoDto>> DeleteMarcarImpresoAsync(int fila, CancellationToken ct) =>
+        EnviarAsync<ImpresoEstadoDto>(HttpMethod.Delete, $"registros/{fila}/impreso", ct);
+
     private async Task<ApiResult<T>> EnviarAsync<T>(HttpMethod metodo, string ruta, CancellationToken ct)
     {
         try

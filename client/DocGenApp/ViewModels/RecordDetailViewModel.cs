@@ -38,6 +38,22 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
 
     partial void OnMarcadoChanged(bool value) => AlCambiarMarcado?.Invoke();
 
+    /// <summary>
+    /// Cuándo se marcó este registro como impreso, según el servidor. <c>null</c> = no
+    /// impreso todavía. Es distinto de <see cref="Marcado"/>: eso solo decide qué entra
+    /// en la próxima generación masiva, esto dice si ya se generó/imprimió antes.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EstaImpreso))]
+    [NotifyPropertyChangedFor(nameof(TextoImpreso))]
+    private DateTimeOffset? _impreso;
+
+    public bool EstaImpreso => Impreso is not null;
+
+    public string TextoImpreso => Impreso is { } fecha
+        ? $"Impreso el {fecha.ToLocalTime():dd/MM/yyyy HH:mm}"
+        : "Sin imprimir";
+
     /// <summary>Todos los grupos del regex y las columnas extra, sean los de por defecto u otros configurados.</summary>
     public ObservableCollection<CampoViewModel> Campos { get; }
 

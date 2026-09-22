@@ -258,7 +258,7 @@
                    SelectedItem="{Binding RegistroSeleccionado, Mode=TwoWay}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:RecordDetailViewModel">
-                <Grid ColumnDefinitions="Auto,*" Margin="0,3">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
                   <CheckBox Grid.Column="0"
                             Margin="0,0,8,0"
                             VerticalAlignment="Center"
@@ -267,6 +267,16 @@
                     <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock Classes="subtitulo" Text="{Binding Subtitulo}" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
+                  <Border Grid.Column="2"
+                          Margin="8,0,0,0"
+                          Padding="7,2"
+                          CornerRadius="10"
+                          VerticalAlignment="Center"
+                          Background="{DynamicResource ExitoFondo}"
+                          IsVisible="{Binding EstaImpreso}"
+                          ToolTip.Tip="{Binding TextoImpreso}">
+                    <TextBlock Text="Impreso" FontSize="11" Foreground="{DynamicResource Exito}" />
+                  </Border>
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -323,7 +333,7 @@
                                     IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).HayRegistroSeleccionado}" />
           </Panel>
 
-          <Grid Grid.Row="1" Margin="0,16,0,0" ColumnDefinitions="*,Auto,Auto">
+          <Grid Grid.Row="1" Margin="0,16,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
             <TextBlock Grid.Column="0"
                        Classes="subtitulo"
                        VerticalAlignment="Center"
@@ -331,14 +341,30 @@
                        Text="{Binding ProgresoTexto}"
                        IsVisible="{Binding Generando}" />
 
+            <!-- El impreso se marca aparte, a mano: generar el .docx no implica haberlo impreso. -->
             <Button Grid.Column="1"
+                    Margin="0,0,10,0"
+                    Padding="18,9"
+                    Content="Marcar como impreso"
+                    Command="{Binding MarcarImpresoCommand}"
+                    IsVisible="{Binding !RegistroSeleccionado.EstaImpreso}"
+                    IsEnabled="{Binding !Generando}" />
+            <Button Grid.Column="1"
+                    Margin="0,0,10,0"
+                    Padding="18,9"
+                    Content="Desmarcar impreso"
+                    Command="{Binding DesmarcarImpresoCommand}"
+                    IsVisible="{Binding RegistroSeleccionado.EstaImpreso}"
+                    IsEnabled="{Binding !Generando}" />
+
+            <Button Grid.Column="2"
                     Margin="0,0,10,0"
                     Padding="18,9"
                     Content="Generar este"
                     Command="{Binding GenerarDocumentoCommand}"
                     IsEnabled="{Binding !Generando}" />
 
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     Padding="18,9"
                     Content="{Binding TextoBotonMasivo}"
                     Background="{DynamicResource Acento}"

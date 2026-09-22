@@ -103,6 +103,16 @@ public sealed class RegistrosResponseDto
     public List<RegistroDto> Registros { get; set; } = [];
     public List<ErrorParseoDto> ErroresParseo { get; set; } = [];
     public DateTimeOffset? UltimaSync { get; set; }
+
+    /// <summary>Fila → cuándo se marcó como impresa. Solo trae las filas marcadas.</summary>
+    public Dictionary<int, DateTimeOffset> Impresos { get; set; } = [];
+}
+
+/// <summary>Respuesta de marcar/desmarcar una fila como impresa.</summary>
+public sealed class ImpresoEstadoDto
+{
+    public int Fila { get; set; }
+    public DateTimeOffset? Impreso { get; set; }
 }
 
 public sealed class SyncResultDto

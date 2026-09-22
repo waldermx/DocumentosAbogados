@@ -75,6 +75,8 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HayRegistroSeleccionado))]
     [NotifyCanExecuteChangedFor(nameof(GenerarDocumentoCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MarcarImpresoCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DesmarcarImpresoCommand))]
     private RecordDetailViewModel? _registroSeleccionado;
 
     [ObservableProperty]
@@ -493,7 +495,11 @@ public sealed partial class MainViewModel : ViewModelBase
 
         _todos = payload.Registros.Select(r =>
         {
-            var vm = new RecordDetailViewModel(r) { Marcado = filasMarcadas.Contains(r.Fila) };
+            var vm = new RecordDetailViewModel(r)
+            {
+                Marcado = filasMarcadas.Contains(r.Fila),
+                Impreso = payload.Impresos.TryGetValue(r.Fila, out var fecha) ? fecha : null
+            };
             vm.AlCambiarMarcado = () =>
             {
                 if (!_marcandoEnBloque)
@@ -592,6 +598,50 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             Estado = EstadoApp.Error;
             MensajeEstado = $"No se pudo generar el documento. {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Marca manual, aparte de generar el documento: generar no implica imprimir, así
+    /// que el usuario confirma él mismo cuándo ya lo imprimió.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
+    private async Task MarcarImpresoAsync()
+    {
+        var registro = RegistroSeleccionado;
+        if (registro is null)
+        {
+            return;
+        }
+
+        var resultado = await _api.PostMarcarImpresoAsync(registro.Fila, CancellationToken.None);
+        if (resultado.Exito)
+        {
+            registro.Impreso = resultado.Valor!.Impreso;
+        }
+        else
+        {
+            MensajeEstado = resultado.Error ?? "No se pudo marcar como impreso.";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
+    private async Task DesmarcarImpresoAsync()
+    {
+        var registro = RegistroSeleccionado;
+        if (registro is null)
+        {
+            return;
+        }
+
+        var resultado = await _api.DeleteMarcarImpresoAsync(registro.Fila, CancellationToken.None);
+        if (resultado.Exito)
+        {
+            registro.Impreso = resultado.Valor!.Impreso;
+        }
+        else
+        {
+            MensajeEstado = resultado.Error ?? "No se pudo desmarcar.";
         }
     }
 

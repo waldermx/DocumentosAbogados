@@ -102,4 +102,7 @@ public sealed class SyncOptions
 
     /// <summary>Archivo donde se persiste el caché para sobrevivir reinicios. Vacío = solo memoria.</summary>
     public string? CacheFilePath { get; set; } = "cache/sheet-cache.json";
+
+    /// <summary>Archivo donde se persisten las marcas de "impreso". Vacío = solo memoria.</summary>
+    public string? ImpresosFilePath { get; set; } = "cache/impresos.json";
 }

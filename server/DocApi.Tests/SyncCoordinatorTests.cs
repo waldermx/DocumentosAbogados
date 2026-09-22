@@ -32,19 +32,22 @@ public class SyncCoordinatorTests
         }
     }
 
-    private static (SyncCoordinator coordinator, FakeSheetSource source, SheetCache cache) Crear(
+    private static (SyncCoordinator coordinator, FakeSheetSource source, SheetCache cache, ImpresosStore impresos) Crear(
         Dictionary<int, FilaCruda> valoresIniciales)
     {
         var source = new FakeSheetSource { Valores = valoresIniciales };
         var parser = new RowParser(Options.Create(new ParsingOptions()), NullLogger<RowParser>.Instance);
 
-        // CacheFilePath vacío = solo memoria, sin tocar disco durante los tests.
+        // CacheFilePath/ImpresosFilePath vacíos = solo memoria, sin tocar disco durante los tests.
         var cache = new SheetCache(
             Options.Create(new SyncOptions { CacheFilePath = null }),
             NullLogger<SheetCache>.Instance);
+        var impresos = new ImpresosStore(
+            Options.Create(new SyncOptions { ImpresosFilePath = null }),
+            NullLogger<ImpresosStore>.Instance);
 
-        var coordinator = new SyncCoordinator(source, parser, cache, NullLogger<SyncCoordinator>.Instance);
-        return (coordinator, source, cache);
+        var coordinator = new SyncCoordinator(source, parser, cache, impresos, NullLogger<SyncCoordinator>.Instance);
+        return (coordinator, source, cache, impresos);
     }
 
     private static Dictionary<int, FilaCruda> TresFilas() => new()
@@ -60,7 +63,7 @@ public class SyncCoordinatorTests
     [Fact]
     public async Task Primera_sync_parsea_todo()
     {
-        var (coordinator, source, cache) = Crear(TresFilas());
+        var (coordinator, source, cache, _) = Crear(TresFilas());
 
         var resultado = await coordinator.SyncAsync(false, CancellationToken.None);
 
@@ -75,7 +78,7 @@ public class SyncCoordinatorTests
     [Fact]
     public async Task Si_modifiedTime_no_cambio_no_se_lee_la_hoja()
     {
-        var (coordinator, source, _) = Crear(TresFilas());
+        var (coordinator, source, _, _) = Crear(TresFilas());
         await coordinator.SyncAsync(false, CancellationToken.None);
 
         // Segunda sync sin tocar la hoja: debe cortarse en el paso 1.
@@ -90,7 +93,7 @@ public class SyncCoordinatorTests
     [Fact]
     public async Task Solo_la_fila_editada_vuelve_a_parsearse()
     {
-        var (coordinator, source, cache) = Crear(TresFilas());
+        var (coordinator, source, cache, _) = Crear(TresFilas());
         await coordinator.SyncAsync(false, CancellationToken.None);
 
         // Se edita una sola fila y avanza modifiedTime.
@@ -108,7 +111,7 @@ public class SyncCoordinatorTests
     [Fact]
     public async Task Una_fila_eliminada_desaparece_del_cache()
     {
-        var (coordinator, source, cache) = Crear(TresFilas());
+        var (coordinator, source, cache, _) = Crear(TresFilas());
         await coordinator.SyncAsync(false, CancellationToken.None);
 
         source.Valores.Remove(4);
@@ -125,7 +128,7 @@ public class SyncCoordinatorTests
     {
         var valores = TresFilas();
         valores[5] = FilaCruda.Simple("texto sin formato");
-        var (coordinator, _, cache) = Crear(valores);
+        var (coordinator, _, cache, _) = Crear(valores);
 
         var resultado = await coordinator.SyncAsync(false, CancellationToken.None);
 
@@ -139,7 +142,7 @@ public class SyncCoordinatorTests
     {
         var valores = TresFilas();
         valores[2] = ConNombre("644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO", "JUAN PEREZ");
-        var (coordinator, source, cache) = Crear(valores);
+        var (coordinator, source, cache, _) = Crear(valores);
         await coordinator.SyncAsync(false, CancellationToken.None);
 
         // Cambia solo el nombre: la columna principal es idéntica, pero la fila debe reparsearse.
@@ -158,7 +161,7 @@ public class SyncCoordinatorTests
     {
         var valores = TresFilas();
         valores[5] = FilaCruda.Simple("777/2026 SEGUNDO TRIBUNAL UNITARIO");
-        var (coordinator, _, cache) = Crear(valores);
+        var (coordinator, _, cache, _) = Crear(valores);
 
         var resultado = await coordinator.SyncAsync(false, CancellationToken.None);
 
@@ -175,7 +178,7 @@ public class SyncCoordinatorTests
     [Fact]
     public async Task Syncs_concurrentes_se_coalescen_en_una_sola_lectura()
     {
-        var (coordinator, source, _) = Crear(TresFilas());
+        var (coordinator, source, _, _) = Crear(TresFilas());
 
         // Varias solicitudes a la vez (polling + botón manual) no deben disparar varias lecturas.
         var tareas = Enumerable.Range(0, 5)
@@ -193,12 +196,64 @@ public class SyncCoordinatorTests
         var cache = new SheetCache(
             Options.Create(new SyncOptions { CacheFilePath = null }),
             NullLogger<SheetCache>.Instance);
+        var impresos = new ImpresosStore(
+            Options.Create(new SyncOptions { ImpresosFilePath = null }),
+            NullLogger<ImpresosStore>.Instance);
         var coordinator = new SyncCoordinator(
-            new SheetSourceNoConfigurado(), parser, cache, NullLogger<SyncCoordinator>.Instance);
+            new SheetSourceNoConfigurado(), parser, cache, impresos, NullLogger<SyncCoordinator>.Instance);
 
         var resultado = await coordinator.SyncAsync(false, CancellationToken.None);
 
         Assert.Equal(SyncOutcome.Error, resultado.Resultado);
         Assert.Contains("no está configurado", resultado.Mensaje);
+    }
+
+    [Fact]
+    public async Task Editar_una_fila_impresa_le_quita_la_marca()
+    {
+        var (coordinator, source, _, impresos) = Crear(TresFilas());
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        impresos.Marcar(3, source.Valores[3].Firma);
+        Assert.True(impresos.Actual.ContainsKey(3));
+
+        // Se edita esa misma fila, aunque sea con buscar y reemplazar: el texto cambia,
+        // la firma ya no coincide, y la marca de impreso debe caerse.
+        source.Valores[3] = FilaCruda.Simple("13/2025 PRIMER COLEGIADO DEL SEGUNDO CIRCUITO");
+        source.ModifiedTime = source.ModifiedTime!.Value.AddMinutes(1);
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        Assert.False(impresos.Actual.ContainsKey(3));
+    }
+
+    [Fact]
+    public async Task Eliminar_una_fila_impresa_le_quita_la_marca()
+    {
+        var (coordinator, source, _, impresos) = Crear(TresFilas());
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        impresos.Marcar(4, source.Valores[4].Firma);
+
+        source.Valores.Remove(4);
+        source.ModifiedTime = source.ModifiedTime!.Value.AddMinutes(1);
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        Assert.False(impresos.Actual.ContainsKey(4));
+    }
+
+    [Fact]
+    public async Task Una_fila_impresa_sin_cambios_conserva_la_marca()
+    {
+        var (coordinator, source, _, impresos) = Crear(TresFilas());
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        impresos.Marcar(2, source.Valores[2].Firma);
+
+        // Otra fila cambia, pero la marcada como impresa no.
+        source.Valores[3] = FilaCruda.Simple("13/2025 PRIMER COLEGIADO DEL SEGUNDO CIRCUITO");
+        source.ModifiedTime = source.ModifiedTime!.Value.AddMinutes(1);
+        await coordinator.SyncAsync(false, CancellationToken.None);
+
+        Assert.True(impresos.Actual.ContainsKey(2));
     }
 }

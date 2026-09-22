@@ -18,6 +18,7 @@ public sealed class SyncCoordinator : IDisposable
     private readonly ISheetSource _source;
     private readonly RowParser _parser;
     private readonly SheetCache _cache;
+    private readonly ImpresosStore _impresos;
     private readonly ILogger<SyncCoordinator> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -27,11 +28,13 @@ public sealed class SyncCoordinator : IDisposable
         ISheetSource source,
         RowParser parser,
         SheetCache cache,
+        ImpresosStore impresos,
         ILogger<SyncCoordinator> logger)
     {
         _source = source;
         _parser = parser;
         _cache = cache;
+        _impresos = impresos;
         _logger = logger;
     }
 
@@ -173,6 +176,10 @@ public sealed class SyncCoordinator : IDisposable
 
             var eliminadas = anterior.ValoresRawPorFila.Keys.Count(f => !valoresNuevos.ContainsKey(f));
             var ahora = DateTimeOffset.UtcNow;
+
+            // Filas marcadas como impresas cuyo contenido cambió (o que desaparecieron)
+            // dejan de estarlo: la marca ya no describe lo que hay en la hoja ahora.
+            _impresos.Reconciliar(valoresNuevos);
 
             _cache.Reemplazar(new SheetCache.Snapshot(
                 registros,
