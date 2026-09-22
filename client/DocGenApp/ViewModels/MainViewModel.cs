@@ -69,6 +69,20 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private ObservableCollection<RecordDetailViewModel> _registros = [];
 
+    /// <summary>Registros ya marcados como impresos: se ocultan de <see cref="Registros"/>
+    /// y solo se ven a través del desplegable "Procesados" de la lista.</summary>
+    [ObservableProperty]
+    private ObservableCollection<RecordDetailViewModel> _registrosImpresos = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayImpresos))]
+    private int _totalImpresos;
+
+    [ObservableProperty]
+    private bool _mostrarImpresos;
+
+    public bool HayImpresos => TotalImpresos > 0;
+
     [ObservableProperty]
     private ObservableCollection<ErrorParseoDto> _erroresParseo = [];
 
@@ -330,16 +344,19 @@ public sealed partial class MainViewModel : ViewModelBase
     private void AplicarFiltro()
     {
         var termino = Filtro.Trim();
-        var visibles = termino.Length == 0
+        var coincidentes = termino.Length == 0
             ? _todos
             : _todos.Where(r => r.Coincide(termino)).ToList();
 
-        Registros = new ObservableCollection<RecordDetailViewModel>(visibles);
+        Registros = new ObservableCollection<RecordDetailViewModel>(coincidentes.Where(r => !r.EstaImpreso));
+        RegistrosImpresos = new ObservableCollection<RecordDetailViewModel>(coincidentes.Where(r => r.EstaImpreso));
+        TotalImpresos = RegistrosImpresos.Count;
         OnPropertyChanged(nameof(TodosMarcados));
 
-        if (RegistroSeleccionado is null || !Registros.Contains(RegistroSeleccionado))
+        if (RegistroSeleccionado is null ||
+            (!Registros.Contains(RegistroSeleccionado) && !RegistrosImpresos.Contains(RegistroSeleccionado)))
         {
-            RegistroSeleccionado = Registros.FirstOrDefault();
+            RegistroSeleccionado = Registros.FirstOrDefault() ?? RegistrosImpresos.FirstOrDefault();
         }
     }
 
@@ -618,6 +635,7 @@ public sealed partial class MainViewModel : ViewModelBase
         if (resultado.Exito)
         {
             registro.Impreso = resultado.Valor!.Impreso;
+            AplicarFiltro();
         }
         else
         {
@@ -638,6 +656,7 @@ public sealed partial class MainViewModel : ViewModelBase
         if (resultado.Exito)
         {
             registro.Impreso = resultado.Valor!.Impreso;
+            AplicarFiltro();
         }
         else
         {

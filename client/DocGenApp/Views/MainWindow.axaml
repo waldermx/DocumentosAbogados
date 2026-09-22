@@ -211,7 +211,7 @@
 
       <!-- Lista de registros -->
       <Border Grid.Column="0" Classes="panel">
-        <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
 
           <StackPanel Grid.Row="0" Spacing="8" Margin="14,12,14,8">
             <TextBlock Classes="etiqueta" Text="REGISTROS" />
@@ -282,8 +282,46 @@
             </ListBox.ItemTemplate>
           </ListBox>
 
-          <!-- Filas con error de parseo: informativo, no bloquea -->
+          <!-- Registros ya marcados como impresos: ocultos de la lista principal por
+               defecto; este desplegable es la única forma de verlos u ocultarlos de nuevo. -->
           <Expander Grid.Row="3"
+                    Margin="10,4"
+                    IsVisible="{Binding HayImpresos}"
+                    IsExpanded="{Binding MostrarImpresos, Mode=TwoWay}">
+            <Expander.Header>
+              <TextBlock Classes="subtitulo">
+                <Run Text="Procesados (" /><Run Text="{Binding TotalImpresos}" /><Run Text=")" />
+              </TextBlock>
+            </Expander.Header>
+            <ListBox Background="Transparent"
+                     BorderThickness="0"
+                     MaxHeight="200"
+                     ItemsSource="{Binding RegistrosImpresos}"
+                     SelectedItem="{Binding RegistroSeleccionado, Mode=TwoWay}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:RecordDetailViewModel">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                      <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="subtitulo" Text="{Binding Subtitulo}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Border Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Padding="7,2"
+                            CornerRadius="10"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource ExitoFondo}"
+                            ToolTip.Tip="{Binding TextoImpreso}">
+                      <TextBlock Text="Impreso" FontSize="11" Foreground="{DynamicResource Exito}" />
+                    </Border>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Expander>
+
+          <!-- Filas con error de parseo: informativo, no bloquea -->
+          <Expander Grid.Row="4"
                     Margin="10"
                     IsVisible="{Binding HayErroresParseo}"
                     Background="{DynamicResource PeligroFondo}">

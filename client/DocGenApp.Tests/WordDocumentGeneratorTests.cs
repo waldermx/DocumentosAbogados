@@ -117,6 +117,92 @@ public sealed class WordDocumentGeneratorTests : IDisposable
     }
 
     [Fact]
+    public void Conserva_el_formato_de_cada_run_al_reemplazar()
+    {
+        // El caso real de la plantilla: "AUTORIZAR" va en negrita y subrayado, y el nombre
+        // del abogado en negrita. Si el reemplazo vuelca todo el párrafo en el primer run,
+        // el documento generado sale entero en texto plano.
+        var ruta = Ruta("formato.docx");
+        using (var doc = WordprocessingDocument.Create(ruta, WordprocessingDocumentType.Document))
+        {
+            var main = doc.AddMainDocumentPart();
+            main.Document = new Document(new Body());
+            var parrafo = new Paragraph();
+            parrafo.Append(RunConFormato("vengo a ", negrita: false));
+            parrafo.Append(RunConFormato("AUTORIZAR", negrita: true));
+            parrafo.Append(RunConFormato(" a ", negrita: false));
+            parrafo.Append(RunConFormato("{{colegio}}", negrita: true));
+            parrafo.Append(RunConFormato(" hoy", negrita: false));
+            main.Document.Body!.Append(parrafo);
+            main.Document.Save();
+        }
+
+        var salida = Ruta("salida-formato.docx");
+        new WordDocumentGenerator().Generar(ruta, Valores(), salida);
+
+        using var generado = WordprocessingDocument.Open(salida, isEditable: false);
+        var runs = generado.MainDocumentPart!.Document.Body!.Descendants<Run>().ToList();
+
+        Assert.Equal("vengo a AUTORIZAR a TERCER COLEGIADO hoy", TextoDe(salida));
+        Assert.Collection(runs,
+            r => AssertRun(r, "vengo a ", negrita: false),
+            r => AssertRun(r, "AUTORIZAR", negrita: true),
+            r => AssertRun(r, " a ", negrita: false),
+            r => AssertRun(r, "TERCER COLEGIADO", negrita: true),
+            r => AssertRun(r, " hoy", negrita: false));
+    }
+
+    [Fact]
+    public void Conserva_el_formato_cuando_el_placeholder_esta_partido_en_varios_runs()
+    {
+        // Word parte el marcador; el valor debe quedar con el formato del run donde empieza
+        // y el texto que venía después del marcador debe conservar el suyo.
+        var ruta = Ruta("formato-partido.docx");
+        using (var doc = WordprocessingDocument.Create(ruta, WordprocessingDocumentType.Document))
+        {
+            var main = doc.AddMainDocumentPart();
+            main.Document = new Document(new Body());
+            var parrafo = new Paragraph();
+            parrafo.Append(RunConFormato("Exp ", negrita: false));
+            parrafo.Append(RunConFormato("{{con", negrita: true));
+            parrafo.Append(RunConFormato("secu", negrita: true));
+            parrafo.Append(RunConFormato("tivo}} final", negrita: false));
+            main.Document.Body!.Append(parrafo);
+            main.Document.Save();
+        }
+
+        var salida = Ruta("salida-formato-partido.docx");
+        new WordDocumentGenerator().Generar(ruta, Valores(), salida);
+
+        using var generado = WordprocessingDocument.Open(salida, isEditable: false);
+        var runs = generado.MainDocumentPart!.Document.Body!.Descendants<Run>().ToList();
+
+        Assert.Equal("Exp 644/2026 final", TextoDe(salida));
+        Assert.Collection(runs,
+            r => AssertRun(r, "Exp ", negrita: false),
+            r => AssertRun(r, "644/2026", negrita: true),
+            r => AssertRun(r, string.Empty, negrita: true),
+            r => AssertRun(r, " final", negrita: false));
+    }
+
+    private static Run RunConFormato(string texto, bool negrita)
+    {
+        var run = new Run(new Text(texto) { Space = SpaceProcessingModeValues.Preserve });
+        if (negrita)
+        {
+            run.RunProperties = new RunProperties(new Bold());
+        }
+
+        return run;
+    }
+
+    private static void AssertRun(Run run, string texto, bool negrita)
+    {
+        Assert.Equal(texto, run.InnerText);
+        Assert.Equal(negrita, run.RunProperties?.Bold is not null);
+    }
+
+    [Fact]
     public void No_modifica_la_plantilla_original()
     {
         var plantilla = CrearPlantilla("intacta.docx", ["Exp {{consecutivo}}"]);
