@@ -36,6 +36,13 @@ public sealed class RegistrosResponseDto
     public required IReadOnlyDictionary<int, DateTimeOffset> Impresos { get; init; }
 }
 
+/// <summary>Payload de <c>DELETE /registros/impresos</c>.</summary>
+public sealed class ImpresosLimpiadosDto
+{
+    /// <summary>Cuántas filas dejaron de estar marcadas.</summary>
+    public required int Desmarcados { get; init; }
+}
+
 /// <summary>Payload de <c>POST/DELETE /registros/{id}/impreso</c>: el estado resultante.</summary>
 public sealed class ImpresoEstadoDto
 {

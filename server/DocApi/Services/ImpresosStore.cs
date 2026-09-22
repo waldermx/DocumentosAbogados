@@ -70,6 +70,25 @@ public sealed class ImpresosStore
         }
     }
 
+    /// <summary>Quita todas las marcas de una vez, para el botón «desmarcar todos» del cliente.</summary>
+    /// <returns>Cuántas marcas se quitaron.</returns>
+    public int DesmarcarTodos()
+    {
+        lock (_gate)
+        {
+            var cuantas = _entradas.Count;
+            if (cuantas == 0)
+            {
+                return 0;
+            }
+
+            _entradas.Clear();
+            GuardarEnDisco();
+            _logger.LogInformation("Se quitó la marca de impreso a las {Cantidad} fila(s) marcadas.", cuantas);
+            return cuantas;
+        }
+    }
+
     /// <summary>
     /// Se llama tras cada sync que leyó la hoja: una fila marcada deja de estar "impresa"
     /// si su firma ya no coincide (se editó, aunque haya sido con buscar y reemplazar) o

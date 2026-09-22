@@ -115,6 +115,12 @@ public sealed class ImpresoEstadoDto
     public DateTimeOffset? Impreso { get; set; }
 }
 
+/// <summary>Respuesta de <c>DELETE /registros/impresos</c>: cuántas marcas se quitaron.</summary>
+public sealed class ImpresosLimpiadosDto
+{
+    public int Desmarcados { get; set; }
+}
+
 public sealed class SyncResultDto
 {
     [JsonConverter(typeof(TextoTolerante))]

@@ -44,6 +44,9 @@ public sealed class ApiClient : IDisposable
     public Task<ApiResult<ImpresoEstadoDto>> DeleteMarcarImpresoAsync(int fila, CancellationToken ct) =>
         EnviarAsync<ImpresoEstadoDto>(HttpMethod.Delete, $"registros/{fila}/impreso", ct);
 
+    public Task<ApiResult<ImpresosLimpiadosDto>> DeleteTodosImpresosAsync(CancellationToken ct) =>
+        EnviarAsync<ImpresosLimpiadosDto>(HttpMethod.Delete, "registros/impresos", ct);
+
     private async Task<ApiResult<T>> EnviarAsync<T>(HttpMethod metodo, string ruta, CancellationToken ct)
     {
         try

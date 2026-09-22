@@ -29,8 +29,7 @@ public static class RegistrosEndpoints
                 : Results.Ok(registro);
         });
 
-        // Marca manual: el cliente la dispara con un botón aparte, nunca automáticamente
-        // al generar el documento, para no dar por impreso algo que solo se generó.
+        // El cliente la dispara al generar el documento y también desde su botón manual.
         grupo.MapPost("/{id:int}/impreso", (int id, SheetCache cache, ImpresosStore impresos) =>
         {
             if (!cache.Actual.ValoresRawPorFila.TryGetValue(id, out var fila))
@@ -47,5 +46,10 @@ public static class RegistrosEndpoints
             impresos.Desmarcar(id);
             return Results.Ok(new ImpresoEstadoDto { Fila = id, Impreso = null });
         });
+
+        // Limpieza masiva: devolver todo lo procesado a la lista principal de una vez,
+        // en una sola llamada en vez de un DELETE por fila.
+        grupo.MapDelete("/impresos", (ImpresosStore impresos) =>
+            Results.Ok(new ImpresosLimpiadosDto { Desmarcados = impresos.DesmarcarTodos() }));
     }
 }

@@ -131,13 +131,34 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
         return valores;
     }
 
-    /// <summary>Nombre sugerido para el archivo, sin caracteres inválidos en Windows.</summary>
+    /// <summary>
+    /// Nombre sugerido para el archivo: el de la parte quejosa y el número de amparo, que
+    /// es como se busca un expediente en la carpeta. Si falta alguno de los dos se usa el
+    /// que haya, y si faltan ambos se cae a la fila para que el archivo siga siendo único.
+    /// </summary>
     public string NombreArchivoSugerido()
     {
-        var baseNombre = string.IsNullOrEmpty(Consecutivo) ? $"registro-{Fila}" : Consecutivo;
-        var limpio = string.Concat(baseNombre.Select(c =>
-            Path.GetInvalidFileNameChars().Contains(c) ? '-' : c));
-        return $"{limpio}.docx";
+        var partes = new[] { Nombre, Consecutivo }
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(Limpiar)
+            .Where(p => p.Length > 0)
+            .ToArray();
+
+        var baseNombre = partes.Length == 0 ? $"registro-{Fila}" : string.Join(" - ", partes);
+        return $"{baseNombre}.docx";
+    }
+
+    /// <summary>
+    /// Quita lo que Windows no admite en un nombre de archivo. El consecutivo trae barra
+    /// ("104/2026"), así que sin esto no se podría guardar.
+    /// </summary>
+    private static string Limpiar(string texto)
+    {
+        var invalidos = Path.GetInvalidFileNameChars();
+        var limpio = string.Concat(texto.Select(c => invalidos.Contains(c) ? '-' : c));
+
+        // Windows rechaza los nombres acabados en punto o espacio.
+        return limpio.Trim().TrimEnd('.', ' ');
     }
 }
 

@@ -289,9 +289,19 @@
                     IsVisible="{Binding HayImpresos}"
                     IsExpanded="{Binding MostrarImpresos, Mode=TwoWay}">
             <Expander.Header>
-              <TextBlock Classes="subtitulo">
-                <Run Text="Procesados (" /><Run Text="{Binding TotalImpresos}" /><Run Text=")" />
-              </TextBlock>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="subtitulo" VerticalAlignment="Center">
+                  <Run Text="Procesados (" /><Run Text="{Binding TotalImpresos}" /><Run Text=")" />
+                </TextBlock>
+                <!-- Dentro de la cabecera para que se pueda usar sin desplegar la lista. -->
+                <Button Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Padding="8,2"
+                        FontSize="11"
+                        Content="Desmarcar todos"
+                        ToolTip.Tip="Devuelve todos los registros procesados a la lista principal"
+                        Command="{Binding DesmarcarTodosImpresosCommand}" />
+              </Grid>
             </Expander.Header>
             <ListBox Background="Transparent"
                      BorderThickness="0"

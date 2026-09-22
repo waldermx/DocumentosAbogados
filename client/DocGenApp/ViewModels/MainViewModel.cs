@@ -76,6 +76,7 @@ public sealed partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HayImpresos))]
+    [NotifyCanExecuteChangedFor(nameof(DesmarcarTodosImpresosCommand))]
     private int _totalImpresos;
 
     [ObservableProperty]
@@ -669,6 +670,35 @@ public sealed partial class MainViewModel : ViewModelBase
         registro.Impreso = resultado.Valor!.Impreso;
         registro.Marcado = false; // ya no está en la lista: no debe seguir contando para el lote
         return true;
+    }
+
+    /// <summary>
+    /// Devuelve a la lista principal todo lo marcado como impreso. Es la salida para
+    /// cuando hay que rehacer un lote entero, en vez de desmarcar fila por fila.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HayImpresos))]
+    private async Task DesmarcarTodosImpresosAsync()
+    {
+        var resultado = await _api.DeleteTodosImpresosAsync(CancellationToken.None);
+        if (!resultado.Exito)
+        {
+            MensajeEstado = resultado.Error ?? "No se pudieron desmarcar los impresos.";
+            return;
+        }
+
+        foreach (var registro in _todos)
+        {
+            registro.Impreso = null;
+        }
+
+        AplicarFiltro();
+        MostrarImpresos = false; // el desplegable se queda vacío: no tiene sentido abierto
+        MensajeExito = resultado.Valor!.Desmarcados switch
+        {
+            0 => "No había registros marcados como impresos.",
+            1 => "1 registro devuelto a la lista.",
+            var n => $"{n} registros devueltos a la lista."
+        };
     }
 
     [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
