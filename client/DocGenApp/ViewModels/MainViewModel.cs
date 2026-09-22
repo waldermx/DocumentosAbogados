@@ -115,6 +115,17 @@ public sealed partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HayErroresParseo))]
     private int _totalErroresParseo;
 
+    /// <summary>Filas que el servidor apartó por traer una palabra de estado. Se listan
+    /// aparte de <see cref="ErroresParseo"/>: no hay nada que corregir en ellas.</summary>
+    [ObservableProperty]
+    private ObservableCollection<ErrorParseoDto> _filasDescartadas = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayDescartadas))]
+    private int _totalDescartadas;
+
+    public bool HayDescartadas => TotalDescartadas > 0;
+
     public bool HayRegistroSeleccionado => RegistroSeleccionado is not null;
     public bool HayErroresParseo => TotalErroresParseo > 0;
     public bool EsSoloLectura => Estado == EstadoApp.SinConexion;
@@ -528,8 +539,15 @@ public sealed partial class MainViewModel : ViewModelBase
             return vm;
         }).ToList();
 
-        ErroresParseo = new ObservableCollection<ErrorParseoDto>(payload.ErroresParseo);
-        TotalErroresParseo = payload.ErroresParseo.Count;
+        // Las descartadas van a su propia lista: "sin coincidencia" debe quedarse solo
+        // con las filas que de verdad hay que limpiar en la hoja.
+        var pendientes = payload.ErroresParseo.Where(e => !e.Descartada).ToList();
+        var descartadas = payload.ErroresParseo.Where(e => e.Descartada).ToList();
+
+        ErroresParseo = new ObservableCollection<ErrorParseoDto>(pendientes);
+        TotalErroresParseo = pendientes.Count;
+        FilasDescartadas = new ObservableCollection<ErrorParseoDto>(descartadas);
+        TotalDescartadas = descartadas.Count;
 
         AplicarFiltro();
         RecalcularMarcados();

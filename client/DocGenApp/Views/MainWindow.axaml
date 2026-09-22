@@ -211,7 +211,7 @@
 
       <!-- Lista de registros -->
       <Border Grid.Column="0" Classes="panel">
-        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
 
           <StackPanel Grid.Row="0" Spacing="8" Margin="14,12,14,8">
             <TextBlock Classes="etiqueta" Text="REGISTROS" />
@@ -355,6 +355,35 @@
                                  FontStyle="Italic"
                                  TextWrapping="Wrap"
                                  Text="{Binding Motivo}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Expander>
+
+          <!-- Descartadas: filas que solo traen una anotación de estado ("PENDIENTE",
+               "CANCELADO", ...). Se apartan de las de arriba porque no hay nada que
+               corregir en ellas; se listan solo para poder comprobar qué se apartó. -->
+          <Expander Grid.Row="5"
+                    Margin="10,0,10,10"
+                    IsVisible="{Binding HayDescartadas}">
+            <Expander.Header>
+              <TextBlock Classes="subtitulo" FontSize="12">
+                <Run Text="{Binding TotalDescartadas}" />
+                <Run Text="fila(s) descartadas por estado" />
+              </TextBlock>
+            </Expander.Header>
+            <ScrollViewer MaxHeight="180">
+              <ItemsControl ItemsSource="{Binding FilasDescartadas}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:ErrorParseoDto">
+                    <StackPanel Spacing="1" Margin="0,0,0,8">
+                      <TextBlock Classes="etiqueta">
+                        <Run Text="FILA" />
+                        <Run Text="{Binding Fila}" />
+                      </TextBlock>
+                      <TextBlock Classes="subtitulo" TextWrapping="Wrap" Text="{Binding ValorCrudo}" />
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

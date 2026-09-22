@@ -23,6 +23,12 @@ public sealed class ErrorParseoDto
     public required int Fila { get; init; }
     public required string ValorCrudo { get; init; }
     public required string Motivo { get; init; }
+
+    /// <summary>
+    /// <c>true</c> si la fila trae una palabra de estado de <c>Parsing:PalabrasDescarte</c>.
+    /// El cliente las aparta de las filas sin coincidencia: no hay nada que corregir en ellas.
+    /// </summary>
+    public bool Descartada { get; init; }
 }
 
 /// <summary>Payload de <c>GET /registros</c>.</summary>

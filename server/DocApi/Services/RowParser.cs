@@ -25,6 +25,16 @@ public sealed class RowParser
     /// <summary>Los patrones realmente activos, en orden. Lo expone <c>GET /diagnostico</c>.</summary>
     public IReadOnlyList<string> Patrones { get; }
 
+    /// <summary>Palabras de estado que mandan una fila sin match al descarte.</summary>
+    public IReadOnlyList<string> PalabrasDescarte { get; }
+
+    /// <summary>
+    /// Alternancia de las palabras de descarte con <c>\b</c> a los lados: se busca la palabra
+    /// entera, para que "pago" no se dispare dentro de "pagos" ni "espera" dentro de "esperar".
+    /// <c>null</c> si no hay ninguna configurada (descarte desactivado).
+    /// </summary>
+    private readonly Regex? _descarte;
+
     public RowParser(IOptions<ParsingOptions> options, ILogger<RowParser> logger)
     {
         _logger = logger;
@@ -48,11 +58,24 @@ public sealed class RowParser
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        PalabrasDescarte = options.Value.PalabrasDescarteEfectivas
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .ToArray();
+
+        _descarte = PalabrasDescarte.Count == 0
+            ? null
+            : new Regex(
+                $@"\b(?:{string.Join("|", PalabrasDescarte.Select(Regex.Escape))})\b",
+                RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
         _logger.LogInformation(
-            "RowParser listo. {Total} patrón(es), se prueban en orden: {Patrones}. Grupos: {Grupos}",
+            "RowParser listo. {Total} patrón(es), se prueban en orden: {Patrones}. Grupos: {Grupos}. " +
+            "Palabras de descarte: {Descarte}",
             _regexes.Length,
             string.Join(" | ", patrones),
-            NombresDeGrupo.Count > 0 ? string.Join(", ", NombresDeGrupo) : "(ninguno con nombre)");
+            NombresDeGrupo.Count > 0 ? string.Join(", ", NombresDeGrupo) : "(ninguno con nombre)",
+            PalabrasDescarte.Count > 0 ? string.Join(", ", PalabrasDescarte) : "(ninguna)");
     }
 
     private static Regex Compilar(string patron)
@@ -89,14 +112,27 @@ public sealed class RowParser
         if (match is null)
         {
             registro = null;
-            error = new ErrorParseoDto
-            {
-                Fila = fila,
-                ValorCrudo = valor,
-                Motivo = _regexes.Length == 1
-                    ? "El valor no coincide con el patrón configurado"
-                    : $"El valor no coincide con ninguno de los {_regexes.Length} patrones configurados"
-            };
+
+            // Una fila que no matchea pero trae una palabra de estado ("PENDIENTE",
+            // "CANCELADO", ...) no es algo que corregir: es una anotación de la hoja.
+            // Se marca como descarte para que el cliente la saque de la lista de pendientes.
+            var palabra = _descarte?.Match(valor);
+            error = palabra is { Success: true }
+                ? new ErrorParseoDto
+                {
+                    Fila = fila,
+                    ValorCrudo = valor,
+                    Motivo = $"Descartada: es una anotación de estado ({palabra.Value})",
+                    Descartada = true
+                }
+                : new ErrorParseoDto
+                {
+                    Fila = fila,
+                    ValorCrudo = valor,
+                    Motivo = _regexes.Length == 1
+                        ? "El valor no coincide con el patrón configurado"
+                        : $"El valor no coincide con ninguno de los {_regexes.Length} patrones configurados"
+                };
             return false;
         }
 

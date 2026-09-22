@@ -96,6 +96,9 @@ public sealed class ErrorParseoDto
     public int Fila { get; set; }
     public string ValorCrudo { get; set; } = string.Empty;
     public string Motivo { get; set; } = string.Empty;
+
+    /// <summary>La fila es una anotación de estado ("PENDIENTE", "CANCELADO", ...), no algo que corregir.</summary>
+    public bool Descartada { get; set; }
 }
 
 public sealed class RegistrosResponseDto

@@ -84,6 +84,25 @@ public sealed class ParsingOptions
         Regexes.Count > 0 ? Regexes
         : !string.IsNullOrWhiteSpace(Regex) ? [Regex]
         : PatronesPorDefecto;
+
+    /// <summary>
+    /// Palabras de estado que la hoja usa en la columna principal. Una fila que no matchea
+    /// ningún patrón <b>y</b> contiene alguna de estas va al descarte en vez de a la lista
+    /// de "sin coincidencia": no hay nada que corregir en ella, es una anotación de estado.
+    /// Vacío = <see cref="PalabrasDescartePorDefecto"/>; para desactivar el descarte, poner
+    /// una lista con una sola cadena vacía.
+    /// </summary>
+    public List<string> PalabrasDescarte { get; set; } = [];
+
+    public static readonly string[] PalabrasDescartePorDefecto =
+    [
+        "pendiente", "elaborado", "espera", "firmas", "sentencia",
+        "presentado", "pago", "cancelado", "enviado"
+    ];
+
+    /// <summary>Las palabras de descarte efectivas, ya resueltas según lo configurado.</summary>
+    public IReadOnlyList<string> PalabrasDescarteEfectivas =>
+        PalabrasDescarte.Count > 0 ? PalabrasDescarte : PalabrasDescartePorDefecto;
 }
 
 public sealed class AuthOptions
