@@ -610,6 +610,14 @@ public sealed partial class MainViewModel : ViewModelBase
             MensajeExito = faltantes.Count == 0
                 ? $"Documento generado: {destino}"
                 : $"Documento generado en {destino}, pero sin valor para: {string.Join(", ", faltantes)}.";
+
+            // Generar saca el registro de la lista: se marca como impreso igual que con
+            // el botón manual, así que reaparece bajo «Impresos» y no se genera dos veces.
+            if (await MarcarImpresoAsync(registro))
+            {
+                AplicarFiltro();
+                RecalcularMarcados();
+            }
         }
         catch (Exception ex)
         {
@@ -619,8 +627,8 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Marca manual, aparte de generar el documento: generar no implica imprimir, así
-    /// que el usuario confirma él mismo cuándo ya lo imprimió.
+    /// Marca manual, para los casos en que el usuario quiere sacar un registro de la
+    /// lista sin generar su documento (o volver a sacarlo tras desmarcarlo).
     /// </summary>
     [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
     private async Task MarcarImpresoAsync()
@@ -631,16 +639,36 @@ public sealed partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var resultado = await _api.PostMarcarImpresoAsync(registro.Fila, CancellationToken.None);
-        if (resultado.Exito)
+        if (await MarcarImpresoAsync(registro))
         {
-            registro.Impreso = resultado.Valor!.Impreso;
             AplicarFiltro();
         }
-        else
+    }
+
+    /// <summary>
+    /// Marca el registro como impreso en el servidor. Es lo que oculta el registro de la
+    /// lista principal, y lo llaman tanto el botón manual como la generación de documentos.
+    /// El caller refresca la vista (<see cref="AplicarFiltro"/>) para poder agrupar el
+    /// refresco de un lote entero en uno solo.
+    /// </summary>
+    /// <returns><c>true</c> si el registro quedó marcado.</returns>
+    private async Task<bool> MarcarImpresoAsync(RecordDetailViewModel registro)
+    {
+        if (registro.EstaImpreso)
+        {
+            return false;
+        }
+
+        var resultado = await _api.PostMarcarImpresoAsync(registro.Fila, CancellationToken.None);
+        if (!resultado.Exito)
         {
             MensajeEstado = resultado.Error ?? "No se pudo marcar como impreso.";
+            return false;
         }
+
+        registro.Impreso = resultado.Valor!.Impreso;
+        registro.Marcado = false; // ya no está en la lista: no debe seguir contando para el lote
+        return true;
     }
 
     [RelayCommand(CanExecute = nameof(HayRegistroSeleccionado))]
@@ -690,6 +718,7 @@ public sealed partial class MainViewModel : ViewModelBase
 
         Generando = true;
         var generados = 0;
+        var generadosOk = new List<RecordDetailViewModel>();
         var fallidos = new List<string>();
         var sinValor = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var usados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -716,6 +745,7 @@ public sealed partial class MainViewModel : ViewModelBase
                         sinValor.Add(f);
                     }
                     generados++;
+                    generadosOk.Add(registro);
                 }
                 catch (Exception ex)
                 {
@@ -732,6 +762,23 @@ public sealed partial class MainViewModel : ViewModelBase
         if (generados > 0)
         {
             UltimaCarpetaGenerada = carpeta;
+        }
+
+        // Igual que en la generación individual: lo generado sale de la lista. Los que
+        // fallaron se quedan a la vista para poder reintentarlos. Un solo refresco al
+        // final, no uno por registro.
+        var ocultados = false;
+        _marcandoEnBloque = true; // un recuento al final, no uno por cada registro del lote
+        foreach (var registro in generadosOk)
+        {
+            ocultados |= await MarcarImpresoAsync(registro);
+        }
+        _marcandoEnBloque = false;
+
+        if (ocultados)
+        {
+            AplicarFiltro();
+            RecalcularMarcados();
         }
 
         MensajeExito = ResumenDelLote(carpeta, generados, fallidos, sinValor);
