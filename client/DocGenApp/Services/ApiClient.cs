@@ -32,8 +32,11 @@ public sealed class ApiClient : IDisposable
     public Task<ApiResult<RegistrosResponseDto>> GetRegistrosAsync(CancellationToken ct) =>
         EnviarAsync<RegistrosResponseDto>(HttpMethod.Get, "registros", ct);
 
+    // forzar=true: el botón manual siempre debe traer datos frescos, sin depender
+    // del chequeo barato de modifiedTime (que puede no reflejar ediciones como
+    // "buscar y reemplazar" hechas en bloque dentro de Sheets).
     public Task<ApiResult<SyncResultDto>> PostSyncAsync(CancellationToken ct) =>
-        EnviarAsync<SyncResultDto>(HttpMethod.Post, "sync", ct);
+        EnviarAsync<SyncResultDto>(HttpMethod.Post, "sync?forzar=true", ct);
 
     private async Task<ApiResult<T>> EnviarAsync<T>(HttpMethod metodo, string ruta, CancellationToken ct)
     {
