@@ -30,7 +30,8 @@
                      VerticalAlignment="Center"
                      Text="{Binding UltimaSyncTexto}"
                      IsVisible="{Binding UltimaSyncTexto, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <Button Content="Actualizar"
+          <Button Content="Sincronizar"
+                  ToolTip.Tip="Trae los cambios de la hoja de Google. El servidor no sincroniza por su cuenta."
                   Command="{Binding RefrescarCommand}"
                   IsEnabled="{Binding !EstaOcupado}" />
           <Button Content="Cambiar password"
@@ -211,11 +212,11 @@
 
       <!-- Lista de registros -->
       <Border Grid.Column="0" Classes="panel">
-        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
 
           <StackPanel Grid.Row="0" Spacing="8" Margin="14,12,14,8">
             <TextBlock Classes="etiqueta" Text="REGISTROS" />
-            <TextBox Watermark="Filtrar por texto, nombre o fila…"
+            <TextBox Watermark="Filtrar por amparo, nombre, circuito o fila…"
                      Text="{Binding Filtro, Mode=TwoWay}" />
           </StackPanel>
 
@@ -328,67 +329,6 @@
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
-          </Expander>
-
-          <!-- Filas con error de parseo: informativo, no bloquea -->
-          <Expander Grid.Row="4"
-                    Margin="10"
-                    IsVisible="{Binding HayErroresParseo}"
-                    Background="{DynamicResource PeligroFondo}">
-            <Expander.Header>
-              <TextBlock Foreground="{DynamicResource Peligro}" FontSize="12">
-                <Run Text="{Binding TotalErroresParseo}" />
-                <Run Text="fila(s) sin coincidencia con ningún patrón" />
-              </TextBlock>
-            </Expander.Header>
-            <ScrollViewer MaxHeight="180">
-              <ItemsControl ItemsSource="{Binding ErroresParseo}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:ErrorParseoDto">
-                    <StackPanel Spacing="1" Margin="0,0,0,8">
-                      <TextBlock Classes="etiqueta">
-                        <Run Text="FILA" />
-                        <Run Text="{Binding Fila}" />
-                      </TextBlock>
-                      <TextBlock Classes="subtitulo" TextWrapping="Wrap" Text="{Binding ValorCrudo}" />
-                      <TextBlock Classes="subtitulo"
-                                 FontStyle="Italic"
-                                 TextWrapping="Wrap"
-                                 Text="{Binding Motivo}" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-          </Expander>
-
-          <!-- Descartadas: filas que solo traen una anotación de estado ("PENDIENTE",
-               "CANCELADO", ...). Se apartan de las de arriba porque no hay nada que
-               corregir en ellas; se listan solo para poder comprobar qué se apartó. -->
-          <Expander Grid.Row="5"
-                    Margin="10,0,10,10"
-                    IsVisible="{Binding HayDescartadas}">
-            <Expander.Header>
-              <TextBlock Classes="subtitulo" FontSize="12">
-                <Run Text="{Binding TotalDescartadas}" />
-                <Run Text="fila(s) descartadas por estado" />
-              </TextBlock>
-            </Expander.Header>
-            <ScrollViewer MaxHeight="180">
-              <ItemsControl ItemsSource="{Binding FilasDescartadas}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:ErrorParseoDto">
-                    <StackPanel Spacing="1" Margin="0,0,0,8">
-                      <TextBlock Classes="etiqueta">
-                        <Run Text="FILA" />
-                        <Run Text="{Binding Fila}" />
-                      </TextBlock>
-                      <TextBlock Classes="subtitulo" TextWrapping="Wrap" Text="{Binding ValorCrudo}" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
           </Expander>
         </Grid>
       </Border>

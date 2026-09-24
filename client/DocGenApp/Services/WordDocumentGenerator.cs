@@ -179,7 +179,7 @@ public sealed class WordDocumentGenerator
     }
 
     /// <summary>
-    /// Crea una plantilla de ejemplo válida con los placeholders del regex por defecto,
+    /// Crea una plantilla de ejemplo válida con los marcadores de las columnas por defecto,
     /// para poder probar la generación de punta a punta antes de tener la plantilla real.
     /// </summary>
     public static void CrearPlantillaDeEjemplo(string ruta)
@@ -201,8 +201,7 @@ public sealed class WordDocumentGenerator
         body.Append(Parrafo("Los siguientes marcadores se sustituyen al generar el documento:"));
         body.Append(Parrafo(string.Empty));
         body.Append(Parrafo("De la hoja:", negrita: true));
-        body.Append(Parrafo("Consecutivo: {{consecutivo}}"));
-        body.Append(Parrafo("Colegio: {{colegio}}"));
+        body.Append(Parrafo("Amparo número: {{consecutivo}}"));
         body.Append(Parrafo("Circuito: {{circuito}}"));
         body.Append(Parrafo("Nombre: {{nombre}}"));
         body.Append(Parrafo(string.Empty));
@@ -211,7 +210,6 @@ public sealed class WordDocumentGenerator
         body.Append(Parrafo("Usuario FIREL: {{abogadoFirel}}"));
         body.Append(Parrafo("Cédula profesional: {{abogadoCedula}}"));
         body.Append(Parrafo(string.Empty));
-        body.Append(Parrafo("Valor original de la hoja: {{valorCrudo}}"));
         body.Append(Parrafo("Fecha de generación: {{fecha}}"));
 
         main.Document.Save();

@@ -15,12 +15,10 @@ builder.Services.ConfigureHttpJsonOptions(opciones =>
 
 // --- Configuración (appsettings + env vars con doble guion bajo: Auth__MasterPassword, etc.) ---
 builder.Services.Configure<GoogleSheetsOptions>(builder.Configuration.GetSection(GoogleSheetsOptions.Section));
-builder.Services.Configure<ParsingOptions>(builder.Configuration.GetSection(ParsingOptions.Section));
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.Section));
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.Section));
 
 // --- Servicios ---
-builder.Services.AddSingleton<RowParser>();
 builder.Services.AddSingleton<SheetCache>();
 builder.Services.AddSingleton<ImpresosStore>();
 
@@ -39,8 +37,9 @@ else
     builder.Services.AddSingleton<ISheetSource, SheetSourceNoConfigurado>();
 }
 
+// La sincronización es solo manual (POST /sync, el botón «Sincronizar» del cliente):
+// no hay polling en segundo plano ni sync al arrancar.
 builder.Services.AddSingleton<SyncCoordinator>();
-builder.Services.AddHostedService<SyncBackgroundService>();
 
 var app = builder.Build();
 

@@ -1,41 +1,18 @@
 namespace DocApi.Models;
 
-/// <summary>Una fila de la columna configurada, ya parseada.</summary>
+/// <summary>Una fila de la hoja con los valores de las columnas configuradas.</summary>
 public sealed class RegistroDto
 {
     /// <summary>Número de fila en la hoja (1-based), usado también como id en la API.</summary>
     public required int Fila { get; init; }
 
-    public required string ValorCrudo { get; init; }
-
-    /// <summary>
-    /// Índice (0-based) del patrón de <c>Parsing:Regexes</c> que reconoció la fila.
-    /// Sirve para ver de un vistazo qué filas cayeron en el patrón laxo.
-    /// </summary>
-    public int PatronUsado { get; init; }
-
     public required ParsedFields Campos { get; init; }
-}
-
-/// <summary>Una fila que no matcheó el regex configurado. No interrumpe el resto de la sync.</summary>
-public sealed class ErrorParseoDto
-{
-    public required int Fila { get; init; }
-    public required string ValorCrudo { get; init; }
-    public required string Motivo { get; init; }
-
-    /// <summary>
-    /// <c>true</c> si la fila trae una palabra de estado de <c>Parsing:PalabrasDescarte</c>.
-    /// El cliente las aparta de las filas sin coincidencia: no hay nada que corregir en ellas.
-    /// </summary>
-    public bool Descartada { get; init; }
 }
 
 /// <summary>Payload de <c>GET /registros</c>.</summary>
 public sealed class RegistrosResponseDto
 {
     public required IReadOnlyList<RegistroDto> Registros { get; init; }
-    public required IReadOnlyList<ErrorParseoDto> ErroresParseo { get; init; }
     public required DateTimeOffset? UltimaSync { get; init; }
 
     /// <summary>Fila → cuándo se marcó como impresa. Solo aparecen las filas marcadas.</summary>

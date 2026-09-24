@@ -13,6 +13,7 @@ public sealed class SheetCache
 {
     private readonly ILogger<SheetCache> _logger;
     private readonly string? _rutaArchivo;
+    private readonly string _origen;
     private volatile Snapshot _actual = Snapshot.Vacio;
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
@@ -20,9 +21,13 @@ public sealed class SheetCache
         WriteIndented = false
     };
 
-    public SheetCache(IOptions<SyncOptions> options, ILogger<SheetCache> logger)
+    public SheetCache(
+        IOptions<SyncOptions> options,
+        IOptions<GoogleSheetsOptions> sheets,
+        ILogger<SheetCache> logger)
     {
         _logger = logger;
+        _origen = sheets.Value.Origen;
         var ruta = options.Value.CacheFilePath;
         _rutaArchivo = string.IsNullOrWhiteSpace(ruta) ? null : Path.GetFullPath(ruta);
         CargarDesdeDisco();
@@ -39,14 +44,12 @@ public sealed class SheetCache
     /// <summary>Vista inmutable del caché. Se reemplaza entera en cada sync exitosa.</summary>
     public sealed record Snapshot(
         IReadOnlyList<RegistroDto> Registros,
-        IReadOnlyList<ErrorParseoDto> ErroresParseo,
         IReadOnlyDictionary<int, FilaCruda> ValoresRawPorFila,
         DateTimeOffset? UltimaSync,
         DateTimeOffset? UltimoModifiedTime)
     {
         public static readonly Snapshot Vacio = new(
             Array.Empty<RegistroDto>(),
-            Array.Empty<ErrorParseoDto>(),
             new Dictionary<int, FilaCruda>(),
             null,
             null);
@@ -55,9 +58,9 @@ public sealed class SheetCache
     // --- Persistencia opcional a JSON, para sobrevivir reinicios sin re-leer la hoja ---
 
     private sealed record EstadoPersistido(
-        List<RegistroDto> Registros,
-        List<ErrorParseoDto> ErroresParseo,
-        Dictionary<int, FilaCruda> ValoresRawPorFila,
+        string? Origen,
+        List<RegistroDto>? Registros,
+        Dictionary<int, FilaCruda>? ValoresRawPorFila,
         DateTimeOffset? UltimaSync,
         DateTimeOffset? UltimoModifiedTime);
 
@@ -72,14 +75,23 @@ public sealed class SheetCache
         {
             var json = File.ReadAllText(_rutaArchivo);
             var estado = JsonSerializer.Deserialize<EstadoPersistido>(json, JsonOpts);
-            if (estado is null)
+            if (estado?.Registros is null || estado.ValoresRawPorFila is null)
             {
+                return;
+            }
+
+            // Otro spreadsheet, otra pestaña u otras columnas: las filas guardadas no
+            // corresponden a la hoja actual. Se arranca vacío hasta la próxima sync.
+            if (!string.Equals(estado.Origen, _origen, StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    "El caché de {Ruta} es de otro origen de datos ('{Anterior}' vs '{Actual}'). Se descarta.",
+                    _rutaArchivo, estado.Origen, _origen);
                 return;
             }
 
             _actual = new Snapshot(
                 estado.Registros,
-                estado.ErroresParseo,
                 estado.ValoresRawPorFila,
                 estado.UltimaSync,
                 estado.UltimoModifiedTime);
@@ -111,8 +123,8 @@ public sealed class SheetCache
             }
 
             var estado = new EstadoPersistido(
+                _origen,
                 snapshot.Registros.ToList(),
-                snapshot.ErroresParseo.ToList(),
                 snapshot.ValoresRawPorFila.ToDictionary(kv => kv.Key, kv => kv.Value),
                 snapshot.UltimaSync,
                 snapshot.UltimoModifiedTime);

@@ -20,9 +20,7 @@ EXPOSE 8080
 #   Auth__MasterPassword
 #   GoogleSheets__SpreadsheetId
 #   GoogleSheets__ServiceAccountJson   (contenido del JSON de service account)
-#   GoogleSheets__Range                (opcional, por defecto Hoja1!C:C)
-#   Parsing__Regex                     (opcional)
-#   Sync__PollingIntervalMinutes       (opcional)
+#   GoogleSheets__Hoja                 (nombre de la pestaña; por defecto Hoja1)
 
 # El caché persistido vive aquí; montar un volumen si se quiere conservar entre despliegues.
 VOLUME /app/cache

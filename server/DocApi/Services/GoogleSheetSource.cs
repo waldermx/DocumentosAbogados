@@ -17,7 +17,7 @@ public sealed class GoogleSheetSource : ISheetSource, IDisposable
     private readonly ILogger<GoogleSheetSource> _logger;
     private readonly SheetsService _sheets;
     private readonly DriveService _drive;
-    private readonly ColumnaExtraOptions[] _extras;
+    private readonly IReadOnlyList<ColumnaOptions> _columnas;
 
     public bool EstaConfigurado => true;
 
@@ -25,7 +25,24 @@ public sealed class GoogleSheetSource : ISheetSource, IDisposable
     {
         _options = options.Value;
         _logger = logger;
-        _extras = _options.ColumnasExtra.Where(c => c.EsValida).ToArray();
+        _columnas = _options.ColumnasValidas;
+
+        if (_columnas.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "GoogleSheets:Columnas está vacío: define al menos una columna (Nombre + Columna).");
+        }
+
+        var duplicadas = _columnas.GroupBy(c => c.Nombre.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToArray();
+        if (duplicadas.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"GoogleSheets:Columnas tiene nombres repetidos: {string.Join(", ", duplicadas)}. " +
+                "Cada columna debe tener un nombre distinto, porque es el marcador de la plantilla.");
+        }
 
         var credential = CrearCredencial(_options)
             .CreateScoped(SheetsService.Scope.SpreadsheetsReadonly, DriveService.Scope.DriveReadonly);
@@ -40,22 +57,9 @@ public sealed class GoogleSheetSource : ISheetSource, IDisposable
         _drive = new DriveService(init);
 
         _logger.LogInformation(
-            "Google Sheets configurado. Spreadsheet {Id}, rango {Rango} (columna '{Columna}'). Columnas extra: {Extras}.",
-            _options.SpreadsheetId, _options.Range, _options.SourceColumnName,
-            _extras.Length > 0
-                ? string.Join(", ", _extras.Select(c => $"{c.Nombre} <- {c.Range}"))
-                : "(ninguna)");
-
-        var duplicadas = _extras.GroupBy(c => c.Nombre, StringComparer.OrdinalIgnoreCase)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .ToArray();
-        if (duplicadas.Length > 0)
-        {
-            throw new InvalidOperationException(
-                $"GoogleSheets:ColumnasExtra tiene nombres repetidos: {string.Join(", ", duplicadas)}. " +
-                "Cada columna extra debe tener un nombre distinto, porque es el marcador de la plantilla.");
-        }
+            "Google Sheets configurado. Spreadsheet {Id}, pestaña '{Hoja}'. Columnas: {Columnas}.",
+            _options.SpreadsheetId, _options.Hoja,
+            string.Join(", ", _columnas.Select(c => $"{c.Nombre} <- {_options.RangoDe(c)}")));
     }
 
     private static GoogleCredential CrearCredencial(GoogleSheetsOptions options)
@@ -87,10 +91,8 @@ public sealed class GoogleSheetSource : ISheetSource, IDisposable
 
     public async Task<IReadOnlyDictionary<int, FilaCruda>> LeerFilasAsync(CancellationToken ct)
     {
-        // Un único batchGet trae la columna principal y las extra: sigue siendo una sola
-        // llamada a Sheets por sync, igual que cuando solo se leía una columna.
-        var rangos = new List<string> { _options.Range };
-        rangos.AddRange(_extras.Select(c => c.Range));
+        // Un único batchGet trae todas las columnas: una sola llamada a Sheets por sync.
+        var rangos = _columnas.Select(_options.RangoDe).ToList();
 
         var request = _sheets.Spreadsheets.Values.BatchGet(_options.SpreadsheetId);
         request.Ranges = rangos;
@@ -105,36 +107,36 @@ public sealed class GoogleSheetSource : ISheetSource, IDisposable
         {
             throw new InvalidOperationException(
                 $"Sheets devolvió {devueltos.Count} rangos para los {rangos.Count} pedidos " +
-                $"({string.Join(", ", rangos)}). Revisa que todos existan en la hoja.");
+                $"({string.Join(", ", rangos)}). Revisa que la pestaña '{_options.Hoja}' exista.");
         }
 
-        var principal = AColumna(devueltos[0].Values, _options.Range);
-        var columnasExtra = _extras
-            .Select((c, i) => (c.Nombre, Valores: AColumna(devueltos[i + 1].Values, c.Range)))
+        var columnas = _columnas
+            .Select((c, i) => (Nombre: c.Nombre.Trim(), Valores: AColumna(devueltos[i].Values, rangos[i])))
             .ToArray();
 
-        var resultado = new Dictionary<int, FilaCruda>(principal.Count);
-        foreach (var (fila, valor) in principal)
+        // Una fila existe si cualquiera de sus columnas tiene algo: una celda vacía no la
+        // descarta, el campo queda vacío y el generador avisa del marcador sin valor.
+        var filas = columnas.SelectMany(c => c.Valores.Keys).Distinct().Order();
+
+        var resultado = new Dictionary<int, FilaCruda>();
+        foreach (var fila in filas)
         {
-            var extra = new Dictionary<string, string>(columnasExtra.Length, StringComparer.OrdinalIgnoreCase);
-            foreach (var (nombre, valores) in columnasExtra)
+            var campos = new Dictionary<string, string>(columnas.Length, StringComparer.OrdinalIgnoreCase);
+            foreach (var (nombre, valores) in columnas)
             {
-                // Una celda vacía en la columna extra no descarta la fila: el campo
-                // queda vacío y el generador avisa de que el marcador se quedó sin valor.
-                extra[nombre] = valores.TryGetValue(fila, out var v) ? v : string.Empty;
+                campos[nombre] = valores.TryGetValue(fila, out var v) ? v : string.Empty;
             }
 
-            resultado[fila] = new FilaCruda(valor, extra);
+            resultado[fila] = new FilaCruda(campos);
         }
 
         return resultado;
     }
 
     /// <summary>
-    /// Convierte un <c>ValueRange</c> de una columna en un diccionario fila → texto.
-    /// El índice de fila es 1-based y relativo al inicio del rango, de modo que coincide
-    /// con lo que el usuario ve en la hoja cuando el rango arranca en la fila 1
-    /// (p. ej. <c>Hoja1!C:C</c>). Por eso todos los rangos deben arrancar en la misma fila.
+    /// Convierte un <c>ValueRange</c> de una columna en un diccionario fila → texto. El
+    /// índice de fila es 1-based y coincide con lo que el usuario ve en la hoja, porque
+    /// todos los rangos son columnas completas que arrancan en la fila 1.
     /// </summary>
     private Dictionary<int, string> AColumna(IList<IList<object>>? filas, string rango)
     {
@@ -148,8 +150,8 @@ public sealed class GoogleSheetSource : ISheetSource, IDisposable
         var primeraFila = _options.TieneEncabezado ? 1 : 0;
         for (var i = primeraFila; i < filas.Count; i++)
         {
-            var celda = filas[i].Count > 0 ? filas[i][0]?.ToString() : null;
-            if (!string.IsNullOrWhiteSpace(celda))
+            var celda = filas[i].Count > 0 ? filas[i][0]?.ToString()?.Trim() : null;
+            if (!string.IsNullOrEmpty(celda))
             {
                 resultado[i + 1] = celda;
             }

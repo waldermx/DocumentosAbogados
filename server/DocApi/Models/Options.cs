@@ -12,97 +12,58 @@ public sealed class GoogleSheetsOptions
 
     public string? SpreadsheetId { get; set; }
 
-    /// <summary>Rango en notación A1, p. ej. <c>Hoja1!C:C</c>. Solo se lee esta columna.</summary>
-    public string Range { get; set; } = "Hoja1!C:C";
+    /// <summary>Nombre de la pestaña de la hoja de cálculo, tal como aparece abajo en Google Sheets.</summary>
+    public string Hoja { get; set; } = "Hoja1";
 
-    /// <summary>Nombre lógico de la columna, solo informativo/para logs.</summary>
-    public string SourceColumnName { get; set; } = "Asunto";
-
-    /// <summary>Si la primera celda del rango es encabezado y debe ignorarse.</summary>
+    /// <summary>Si la primera fila de la hoja es encabezado y debe ignorarse.</summary>
     public bool TieneEncabezado { get; set; } = true;
 
     /// <summary>
-    /// Columnas adicionales de la misma hoja que se leen tal cual (sin pasar por el regex)
-    /// y se unen a cada registro por número de fila. Cada una queda disponible como
-    /// marcador <c>{{nombre}}</c> en la plantilla.
+    /// Columnas que se leen de la hoja. Cada valor se copia tal cual, sin interpretarlo,
+    /// y queda disponible como marcador <c>{{Nombre}}</c> en la plantilla.
     /// </summary>
-    public List<ColumnaExtraOptions> ColumnasExtra { get; set; } = [];
+    public List<ColumnaOptions> Columnas { get; set; } = [];
+
+    public IReadOnlyList<ColumnaOptions> ColumnasValidas => Columnas.Where(c => c.EsValida).ToArray();
 
     public bool EstaConfigurado =>
         !string.IsNullOrWhiteSpace(SpreadsheetId) &&
         (!string.IsNullOrWhiteSpace(ServiceAccountJson) || !string.IsNullOrWhiteSpace(ServiceAccountJsonPath));
+
+    /// <summary>Rango A1 de una columna completa de la pestaña configurada, p. ej. <c>'Hoja1'!B:B</c>.</summary>
+    public string RangoDe(ColumnaOptions columna)
+    {
+        // Entre comillas siempre: así funcionan pestañas con espacios o guiones ('S-da').
+        var hoja = Hoja.Replace("'", "''");
+        var letra = columna.Columna.Trim().ToUpperInvariant();
+        return $"'{hoja}'!{letra}:{letra}";
+    }
+
+    /// <summary>
+    /// Identifica de dónde salen los datos. El caché y las marcas de impreso lo guardan
+    /// junto con su contenido: si se cambia de hoja o de columnas, lo persistido describe
+    /// otras filas y se descarta al arrancar en vez de mezclarse con los datos nuevos.
+    /// </summary>
+    public string Origen =>
+        string.Join('|', ColumnasValidas
+            .Select(c => $"{c.Nombre.Trim().ToLowerInvariant()}={c.Columna.Trim().ToUpperInvariant()}")
+            .Prepend(Hoja)
+            .Prepend(SpreadsheetId ?? string.Empty));
 }
 
-/// <summary>Una columna extra: el nombre del campo y el rango A1 de donde sale.</summary>
-public sealed class ColumnaExtraOptions
+/// <summary>Una columna de la hoja: el nombre del campo y la letra de donde sale.</summary>
+public sealed class ColumnaOptions
 {
     /// <summary>Nombre del campo; se convierte en el marcador <c>{{Nombre}}</c>.</summary>
     public string Nombre { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Rango A1 de la columna, p. ej. <c>Hoja1!D:D</c>. Debe arrancar en la misma fila
-    /// que <see cref="GoogleSheetsOptions.Range"/> para que las filas se correspondan.
-    /// </summary>
-    public string Range { get; set; } = string.Empty;
+    /// <summary>Letra de la columna, p. ej. <c>B</c>.</summary>
+    public string Columna { get; set; } = string.Empty;
 
     public bool EsValida =>
-        !string.IsNullOrWhiteSpace(Nombre) && !string.IsNullOrWhiteSpace(Range);
-}
-
-public sealed class ParsingOptions
-{
-    public const string Section = "Parsing";
-
-    /// <summary>
-    /// Patrones que se prueban <b>en orden</b> contra cada celda: gana el primero que coincida.
-    /// Permite convivir variantes del texto (con circuito al final, sin él, con otra cola)
-    /// sin que ninguna quede fuera. Vacío = <see cref="PatronesPorDefecto"/>.
-    /// </summary>
-    public List<string> Regexes { get; set; } = [];
-
-    /// <summary>Compatibilidad: un único patrón. Solo se usa si <see cref="Regexes"/> está vacío.</summary>
-    public string? Regex { get; set; }
-
-    /// <summary>
-    /// Del más específico al más laxo. Cubren las variantes reales encontradas en la hoja:
-    /// año de 2 o 4 dígitos (<c>21</c> o <c>2026</c>), con o sin <c>DEL &lt;circuito&gt;</c>,
-    /// con una palabra delante del consecutivo (<c>REVISIÓN 1/2022 ...</c>) o con el
-    /// consecutivo al final en vez de al principio (<c>Primer Colegiado 33/2022</c>).
-    /// </summary>
-    public static readonly string[] PatronesPorDefecto =
-    [
-        // 1) Canónico: [prefijo opcional] consecutivo colegio DEL circuito.
-        @"^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+?)\s+DEL\s+(?<circuito>.+)$",
-        // 2) Igual, sin "DEL <circuito>" al final — no todas las filas lo llevan.
-        @"^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+)$",
-        // 3) El consecutivo va al final en vez de al principio.
-        @"^(?<colegio>.+?)\s+(?<consecutivo>\d+/\d{2,4})$"
-    ];
-
-    /// <summary>Los patrones efectivos, ya resueltos según lo configurado.</summary>
-    public IReadOnlyList<string> PatronesEfectivos =>
-        Regexes.Count > 0 ? Regexes
-        : !string.IsNullOrWhiteSpace(Regex) ? [Regex]
-        : PatronesPorDefecto;
-
-    /// <summary>
-    /// Palabras de estado que la hoja usa en la columna principal. Una fila que no matchea
-    /// ningún patrón <b>y</b> contiene alguna de estas va al descarte en vez de a la lista
-    /// de "sin coincidencia": no hay nada que corregir en ella, es una anotación de estado.
-    /// Vacío = <see cref="PalabrasDescartePorDefecto"/>; para desactivar el descarte, poner
-    /// una lista con una sola cadena vacía.
-    /// </summary>
-    public List<string> PalabrasDescarte { get; set; } = [];
-
-    public static readonly string[] PalabrasDescartePorDefecto =
-    [
-        "pendiente", "elaborado", "espera", "firmas", "sentencia",
-        "presentado", "pago", "cancelado", "enviado"
-    ];
-
-    /// <summary>Las palabras de descarte efectivas, ya resueltas según lo configurado.</summary>
-    public IReadOnlyList<string> PalabrasDescarteEfectivas =>
-        PalabrasDescarte.Count > 0 ? PalabrasDescarte : PalabrasDescartePorDefecto;
+        !string.IsNullOrWhiteSpace(Nombre) &&
+        !string.IsNullOrWhiteSpace(Columna) &&
+        Columna.Trim().All(char.IsAsciiLetter);
 }
 
 public sealed class AuthOptions
@@ -116,8 +77,6 @@ public sealed class AuthOptions
 public sealed class SyncOptions
 {
     public const string Section = "Sync";
-
-    public int PollingIntervalMinutes { get; set; } = 5;
 
     /// <summary>Archivo donde se persiste el caché para sobrevivir reinicios. Vacío = solo memoria.</summary>
     public string? CacheFilePath { get; set; } = "cache/sheet-cache.json";

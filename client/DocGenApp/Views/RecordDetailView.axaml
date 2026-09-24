@@ -26,14 +26,9 @@
         <TextBlock Classes="valor" Text="{Binding Fila}" />
       </StackPanel>
 
-      <StackPanel Spacing="2">
-        <TextBlock Classes="etiqueta" Text="VALOR ORIGINAL" />
-        <TextBlock Classes="valor" Text="{Binding ValorCrudo}" />
-      </StackPanel>
-
       <Separator Background="{DynamicResource Borde}" Height="1" />
 
-      <TextBlock Classes="etiqueta" Text="CAMPOS EXTRAÍDOS" />
+      <TextBlock Classes="etiqueta" Text="DATOS DE LA HOJA" />
 
       <ItemsControl ItemsSource="{Binding Campos}">
         <ItemsControl.ItemTemplate>

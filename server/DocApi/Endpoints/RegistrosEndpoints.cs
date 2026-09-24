@@ -15,7 +15,6 @@ public static class RegistrosEndpoints
             return Results.Ok(new RegistrosResponseDto
             {
                 Registros = snapshot.Registros,
-                ErroresParseo = snapshot.ErroresParseo,
                 UltimaSync = snapshot.UltimaSync,
                 Impresos = impresos.Actual.ToDictionary(kv => kv.Key, kv => kv.Value.Fecha)
             });

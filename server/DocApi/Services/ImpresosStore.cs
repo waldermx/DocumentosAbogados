@@ -24,9 +24,21 @@ public sealed class ImpresosStore
         WriteIndented = false
     };
 
-    public ImpresosStore(IOptions<SyncOptions> options, ILogger<ImpresosStore> logger)
+    /// <summary>
+    /// Formato en disco. El origen va junto a las marcas porque se indexan por número de
+    /// fila: con otra hoja, la fila 5 es otro expediente y su marca no significa nada.
+    /// </summary>
+    private sealed record EstadoPersistido(string? Origen, Dictionary<int, ImpresoEntry>? Entradas);
+
+    private readonly string _origen;
+
+    public ImpresosStore(
+        IOptions<SyncOptions> options,
+        IOptions<GoogleSheetsOptions> sheets,
+        ILogger<ImpresosStore> logger)
     {
         _logger = logger;
+        _origen = sheets.Value.Origen;
         var ruta = options.Value.ImpresosFilePath;
         _rutaArchivo = string.IsNullOrWhiteSpace(ruta) ? null : Path.GetFullPath(ruta);
         _entradas = CargarDesdeDisco();
@@ -131,8 +143,19 @@ public sealed class ImpresosStore
         try
         {
             var json = File.ReadAllText(_rutaArchivo);
-            var estado = JsonSerializer.Deserialize<Dictionary<int, ImpresoEntry>>(json, JsonOpts);
-            return estado ?? new Dictionary<int, ImpresoEntry>();
+            var estado = JsonSerializer.Deserialize<EstadoPersistido>(json, JsonOpts);
+
+            // Un archivo de otra hoja (o del formato anterior, que no guardaba el origen)
+            // se descarta: sus números de fila apuntan a expedientes que ya no son esos.
+            if (!string.Equals(estado?.Origen, _origen, StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    "Las marcas de impreso de {Ruta} son de otro origen de datos. Se arranca sin marcas.",
+                    _rutaArchivo);
+                return new Dictionary<int, ImpresoEntry>();
+            }
+
+            return estado!.Entradas ?? new Dictionary<int, ImpresoEntry>();
         }
         catch (Exception ex)
         {
@@ -157,7 +180,7 @@ public sealed class ImpresosStore
             }
 
             var temp = _rutaArchivo + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(_entradas, JsonOpts));
+            File.WriteAllText(temp, JsonSerializer.Serialize(new EstadoPersistido(_origen, _entradas), JsonOpts));
             File.Move(temp, _rutaArchivo, overwrite: true);
         }
         catch (Exception ex)

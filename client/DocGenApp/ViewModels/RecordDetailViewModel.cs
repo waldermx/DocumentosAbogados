@@ -17,9 +17,7 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
     public RegistroDto Registro { get; }
 
     public int Fila => Registro.Fila;
-    public string ValorCrudo => Registro.ValorCrudo;
     public string Consecutivo => Registro.Campos.Consecutivo;
-    public string Colegio => Registro.Campos.Colegio;
     public string Circuito => Registro.Campos.Circuito;
     public string Nombre => Registro.Campos.Nombre;
 
@@ -54,7 +52,7 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
         ? $"Impreso el {fecha.ToLocalTime():dd/MM/yyyy HH:mm}"
         : "Sin imprimir";
 
-    /// <summary>Todos los grupos del regex y las columnas extra, sean los de por defecto u otros configurados.</summary>
+    /// <summary>Todas las columnas que manda el servidor, sean las de por defecto u otras configuradas.</summary>
     public ObservableCollection<CampoViewModel> Campos { get; }
 
     /// <summary>
@@ -82,18 +80,16 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
         {
             // Si el nombre ya ocupa el título, el consecutivo baja aquí; si no, no se repite.
             var partes = string.IsNullOrEmpty(Nombre)
-                ? new[] { Colegio, Circuito }
-                : [Consecutivo, Colegio, Circuito];
+                ? new[] { Circuito }
+                : [Consecutivo, Circuito];
 
-            var visibles = partes.Where(p => !string.IsNullOrEmpty(p)).ToArray();
-            return visibles.Length == 0 ? ValorCrudo : string.Join(" · ", visibles);
+            return string.Join(" · ", partes.Where(p => !string.IsNullOrEmpty(p)));
         }
     }
 
-    /// <summary>Texto sobre el que filtra la búsqueda de la lista.</summary>
+    /// <summary>La búsqueda de la lista mira todas las columnas de la fila y su número.</summary>
     public bool Coincide(string termino) =>
-        ValorCrudo.Contains(termino, StringComparison.OrdinalIgnoreCase) ||
-        Nombre.Contains(termino, StringComparison.OrdinalIgnoreCase) ||
+        Registro.Campos.Grupos.Values.Any(v => v.Contains(termino, StringComparison.OrdinalIgnoreCase)) ||
         Fila.ToString().Contains(termino, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -107,7 +103,6 @@ public sealed partial class RecordDetailViewModel : ViewModelBase
     {
         var valores = new Dictionary<string, string>(Registro.Campos.Grupos, StringComparer.OrdinalIgnoreCase)
         {
-            ["valorCrudo"] = ValorCrudo,
             ["fila"] = Fila.ToString(),
             ["fecha"] = DateTime.Now.ToString("dd/MM/yyyy")
         };

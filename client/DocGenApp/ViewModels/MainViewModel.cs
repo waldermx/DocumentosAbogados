@@ -85,9 +85,6 @@ public sealed partial class MainViewModel : ViewModelBase
     public bool HayImpresos => TotalImpresos > 0;
 
     [ObservableProperty]
-    private ObservableCollection<ErrorParseoDto> _erroresParseo = [];
-
-    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HayRegistroSeleccionado))]
     [NotifyCanExecuteChangedFor(nameof(GenerarDocumentoCommand))]
     [NotifyCanExecuteChangedFor(nameof(MarcarImpresoCommand))]
@@ -111,23 +108,7 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string? _ultimaSyncTexto;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HayErroresParseo))]
-    private int _totalErroresParseo;
-
-    /// <summary>Filas que el servidor apartó por traer una palabra de estado. Se listan
-    /// aparte de <see cref="ErroresParseo"/>: no hay nada que corregir en ellas.</summary>
-    [ObservableProperty]
-    private ObservableCollection<ErrorParseoDto> _filasDescartadas = [];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HayDescartadas))]
-    private int _totalDescartadas;
-
-    public bool HayDescartadas => TotalDescartadas > 0;
-
     public bool HayRegistroSeleccionado => RegistroSeleccionado is not null;
-    public bool HayErroresParseo => TotalErroresParseo > 0;
     public bool EsSoloLectura => Estado == EstadoApp.SinConexion;
     public bool EstaOcupado => Estado is EstadoApp.Cargando or EstadoApp.Sincronizando;
     public bool PidePassword => Estado == EstadoApp.PidiendoPassword;
@@ -426,7 +407,10 @@ public sealed partial class MainViewModel : ViewModelBase
         MensajeEstado = "Introduce la password maestra para conectar con el servidor.";
     }
 
-    /// <summary>Botón "Actualizar": fuerza sync en el servidor y luego relee los registros.</summary>
+    /// <summary>
+    /// Botón «Sincronizar»: fuerza sync en el servidor y luego relee los registros. Es la
+    /// única forma de traer cambios de la hoja: el servidor no sincroniza por su cuenta.
+    /// </summary>
     [RelayCommand]
     private async Task RefrescarAsync()
     {
@@ -492,7 +476,7 @@ public sealed partial class MainViewModel : ViewModelBase
         MensajeEstado = $"{_todos.Count} registros cargados.";
         UltimaSyncTexto = payload.UltimaSync is { } s
             ? $"Última sincronización: {s.ToLocalTime():dd/MM/yyyy HH:mm}"
-            : "Sin sincronizar todavía.";
+            : "Sin sincronizar todavía: pulsa «Sincronizar».";
     }
 
     private void CargarDesdeCacheLocal(bool avisar, string? detalle = null)
@@ -538,16 +522,6 @@ public sealed partial class MainViewModel : ViewModelBase
             };
             return vm;
         }).ToList();
-
-        // Las descartadas van a su propia lista: "sin coincidencia" debe quedarse solo
-        // con las filas que de verdad hay que limpiar en la hoja.
-        var pendientes = payload.ErroresParseo.Where(e => !e.Descartada).ToList();
-        var descartadas = payload.ErroresParseo.Where(e => e.Descartada).ToList();
-
-        ErroresParseo = new ObservableCollection<ErrorParseoDto>(pendientes);
-        TotalErroresParseo = pendientes.Count;
-        FilasDescartadas = new ObservableCollection<ErrorParseoDto>(descartadas);
-        TotalDescartadas = descartadas.Count;
 
         AplicarFiltro();
         RecalcularMarcados();

@@ -233,7 +233,6 @@ public sealed class WordDocumentGeneratorTests : IDisposable
         Assert.Contains("{{consecutivo}}", TextoDe(plantilla));
 
         var valores = Valores();
-        valores["valorCrudo"] = "644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO";
         valores["fecha"] = "21/09/2026";
         valores["nombre"] = "JUAN PEREZ LOPEZ";
         valores["abogadoNombre"] = "ANA GARCIA";

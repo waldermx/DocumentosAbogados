@@ -10,6 +10,7 @@ public class ImpresosStoreTests
 {
     private static ImpresosStore Crear() => new(
         Options.Create(new SyncOptions { ImpresosFilePath = null }),
+        Options.Create(new GoogleSheetsOptions()),
         NullLogger<ImpresosStore>.Instance);
 
     [Fact]

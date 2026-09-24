@@ -21,7 +21,6 @@ public class NombreArchivoSugeridoTests
         return new RecordDetailViewModel(new RegistroDto
         {
             Fila = fila,
-            ValorCrudo = "crudo",
             Campos = new ParsedFields { Grupos = grupos }
         });
     }

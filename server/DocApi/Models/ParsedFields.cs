@@ -1,9 +1,9 @@
 namespace DocApi.Models;
 
 /// <summary>
-/// Campos extraídos de un valor crudo por <see cref="Services.RowParser"/>.
-/// Los grupos se exponen como diccionario para que cambiar los nombres de grupo
-/// del regex en configuración no obligue a recompilar.
+/// Los valores de las columnas configuradas para una fila, copiados tal cual de la hoja.
+/// Se exponen como diccionario para que añadir o renombrar una columna en configuración
+/// no obligue a recompilar.
 /// </summary>
 public sealed class ParsedFields
 {
@@ -12,7 +12,7 @@ public sealed class ParsedFields
     /// <summary>
     /// Indexado sin distinguir mayúsculas. El <c>init</c> reconstruye el diccionario porque
     /// al restaurar el caché desde disco System.Text.Json crea uno con el comparador por
-    /// defecto, y el nombre de una columna extra lo escribe quien configura el servidor.
+    /// defecto, y el nombre de una columna lo escribe quien configura el servidor.
     /// </summary>
     public required IReadOnlyDictionary<string, string> Grupos
     {
@@ -30,13 +30,10 @@ public sealed class ParsedFields
         }
     }
 
-    /// <summary>Atajos para los grupos del regex por defecto; vacíos si el patrón configurado no los define.</summary>
+    /// <summary>Atajos para las columnas por defecto; vacíos si la columna no está configurada.</summary>
     public string Consecutivo => Obtener("consecutivo");
-    public string Colegio => Obtener("colegio");
-    public string Circuito => Obtener("circuito");
-
-    /// <summary>Atajo para la columna extra <c>nombre</c>; vacío si no está configurada.</summary>
     public string Nombre => Obtener("nombre");
+    public string Circuito => Obtener("circuito");
 
     private string Obtener(string nombre) =>
         Grupos.TryGetValue(nombre, out var valor) ? valor : string.Empty;

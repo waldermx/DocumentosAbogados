@@ -2,34 +2,22 @@ using System.Text.Json.Serialization;
 
 namespace DocApi.Services;
 
-/// <summary>
-/// Una fila tal como viene de la hoja: el valor de la columna principal (el que pasa por el
-/// regex) más los valores de las columnas extra, que se copian tal cual.
-/// </summary>
-public sealed record FilaCruda(string Valor, IReadOnlyDictionary<string, string> Extra)
+/// <summary>Una fila tal como viene de la hoja: nombre de columna → valor de la celda.</summary>
+public sealed record FilaCruda(IReadOnlyDictionary<string, string> Campos)
 {
-    private static readonly IReadOnlyDictionary<string, string> Vacio =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Fila sin columnas extra. Es un método y no un segundo constructor porque
-    /// System.Text.Json exige un único constructor público para deserializar el caché.</summary>
-    public static FilaCruda Simple(string valor) => new(valor, Vacio);
-
     /// <summary>
-    /// Texto que representa toda la fila. El diff de sync compara esto: así una columna extra
-    /// editada también invalida la fila, igual que un cambio en la columna principal.
+    /// Texto que representa toda la fila. Las marcas de impreso lo guardan y lo comparan
+    /// en cada sync: si cualquier columna de la fila se edita, la marca deja de valer.
     /// </summary>
     [JsonIgnore]
-    public string Firma => Extra.Count == 0
-        ? Valor
-        : string.Join('\u001F', Extra.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(kv => $"{kv.Key}={kv.Value}")
-            .Prepend(Valor));
+    public string Firma => string.Join('\u001F', Campos
+        .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(kv => $"{kv.Key}={kv.Value}"));
 }
 
 /// <summary>
 /// Origen de datos de la hoja. Abstraído para poder correr sin credenciales de Google
-/// (ver <see cref="SheetSourceNoConfigurado"/>) y para poder testear el diff de sync.
+/// (ver <see cref="SheetSourceNoConfigurado"/>) y para poder testear la sync.
 /// </summary>
 public interface ISheetSource
 {
@@ -43,8 +31,8 @@ public interface ISheetSource
     Task<DateTimeOffset?> GetModifiedTimeAsync(CancellationToken ct);
 
     /// <summary>
-    /// Paso 2 del sync: lee la columna principal y las columnas extra configuradas,
-    /// en una sola llamada. Devuelve las filas indexadas por número de fila (1-based en la hoja).
+    /// Paso 2 del sync: lee las columnas configuradas en una sola llamada. Devuelve las filas
+    /// con algún valor, indexadas por número de fila (1-based en la hoja).
     /// </summary>
     Task<IReadOnlyDictionary<int, FilaCruda>> LeerFilasAsync(CancellationToken ct);
 }

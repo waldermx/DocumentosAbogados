@@ -4,19 +4,19 @@ using DocApi.Models;
 namespace DocApi.Services;
 
 /// <summary>
-/// Orquesta la sincronización en tres pasos, con single-flight:
-///   1. chequeo barato de <c>modifiedTime</c> en Drive — si no cambió, corta ahí;
-///   2. una sola lectura de la columna configurada vía Sheets;
-///   3. diff por fila: solo las filas cuyo texto cambió vuelven a pasar por el regex.
+/// Orquesta la sincronización, que solo se dispara a mano (<c>POST /sync</c>), con single-flight:
+///   1. chequeo barato de <c>modifiedTime</c> en Drive — si no cambió, corta ahí
+///      (salvo que se pida lectura forzada, que es lo que hace el cliente);
+///   2. una sola lectura de las columnas configuradas vía Sheets;
+///   3. los valores se copian tal cual a los registros y se reemplaza el caché.
 ///
 /// El <see cref="SemaphoreSlim"/> garantiza que varias solicitudes concurrentes
-/// (polling + botón manual) no disparen varias syncs: las demás esperan y obtienen
-/// el resultado de la que corrió.
+/// (dos clientes pulsando «Sincronizar» a la vez) no disparen varias lecturas: las
+/// demás esperan y obtienen el resultado de la que corrió.
 /// </summary>
 public sealed class SyncCoordinator : IDisposable
 {
     private readonly ISheetSource _source;
-    private readonly RowParser _parser;
     private readonly SheetCache _cache;
     private readonly ImpresosStore _impresos;
     private readonly ILogger<SyncCoordinator> _logger;
@@ -26,13 +26,11 @@ public sealed class SyncCoordinator : IDisposable
 
     public SyncCoordinator(
         ISheetSource source,
-        RowParser parser,
         SheetCache cache,
         ImpresosStore impresos,
         ILogger<SyncCoordinator> logger)
     {
         _source = source;
-        _parser = parser;
         _cache = cache;
         _impresos = impresos;
         _logger = logger;
@@ -83,7 +81,6 @@ public sealed class SyncCoordinator : IDisposable
                 Resultado = SyncOutcome.Error,
                 UltimaSync = anterior.UltimaSync,
                 TotalRegistros = anterior.Registros.Count,
-                TotalErroresParseo = anterior.ErroresParseo.Count,
                 Mensaje = SheetSourceNoConfigurado.Mensaje
             };
         }
@@ -91,116 +88,57 @@ public sealed class SyncCoordinator : IDisposable
         try
         {
             // --- Paso 1: chequeo barato ---
-            DateTimeOffset? modifiedTime = null;
-            if (!forzarLecturaCompleta)
+            var modifiedTime = await _source.GetModifiedTimeAsync(ct).ConfigureAwait(false);
+
+            if (!forzarLecturaCompleta &&
+                modifiedTime is not null &&
+                anterior.UltimoModifiedTime is not null &&
+                modifiedTime == anterior.UltimoModifiedTime)
             {
-                modifiedTime = await _source.GetModifiedTimeAsync(ct).ConfigureAwait(false);
-
-                if (modifiedTime is not null &&
-                    anterior.UltimoModifiedTime is not null &&
-                    modifiedTime == anterior.UltimoModifiedTime)
-                {
-                    _logger.LogInformation(
-                        "Paso 1: la hoja no cambió (modifiedTime {ModifiedTime}). No se lee Sheets ni se reparsea nada.",
-                        modifiedTime);
-
-                    return new SyncResult
-                    {
-                        Resultado = SyncOutcome.SinCambios,
-                        UltimaSync = anterior.UltimaSync,
-                        TotalRegistros = anterior.Registros.Count,
-                        TotalErroresParseo = anterior.ErroresParseo.Count,
-                        FilasReutilizadas = anterior.ValoresRawPorFila.Count
-                    };
-                }
-
                 _logger.LogInformation(
-                    "Paso 1: la hoja cambió (modifiedTime {Nuevo}, anterior {Anterior}). Se procede a leer.",
-                    modifiedTime, anterior.UltimoModifiedTime);
-            }
-            else
-            {
-                _logger.LogInformation("Paso 1 omitido: se pidió lectura completa forzada.");
-                modifiedTime = await _source.GetModifiedTimeAsync(ct).ConfigureAwait(false);
-            }
+                    "Paso 1: la hoja no cambió (modifiedTime {ModifiedTime}). No se lee Sheets.",
+                    modifiedTime);
 
-            // --- Paso 2: lectura completa de las columnas configuradas ---
-            var valoresNuevos = await _source.LeerFilasAsync(ct).ConfigureAwait(false);
-
-            // --- Paso 3: diff por fila ---
-            var registrosPorFila = anterior.Registros.ToDictionary(r => r.Fila);
-            var erroresPorFila = anterior.ErroresParseo.ToDictionary(e => e.Fila);
-
-            var registros = new List<RegistroDto>(valoresNuevos.Count);
-            var errores = new List<ErrorParseoDto>();
-            var reparseadas = 0;
-            var reutilizadas = 0;
-
-            foreach (var (fila, valor) in valoresNuevos.OrderBy(kv => kv.Key))
-            {
-                // Se compara la firma y no solo la columna principal: editar una columna
-                // extra (p. ej. el nombre) también tiene que invalidar la fila.
-                var sinCambios = !forzarLecturaCompleta
-                    && anterior.ValoresRawPorFila.TryGetValue(fila, out var valorAnterior)
-                    && string.Equals(valorAnterior.Firma, valor.Firma, StringComparison.Ordinal);
-
-                if (sinCambios)
+                return new SyncResult
                 {
-                    // El texto es idéntico: se conserva el resultado ya calculado, sea registro o error.
-                    if (registrosPorFila.TryGetValue(fila, out var registroPrevio))
-                    {
-                        registros.Add(registroPrevio);
-                        reutilizadas++;
-                        continue;
-                    }
-
-                    if (erroresPorFila.TryGetValue(fila, out var errorPrevio))
-                    {
-                        errores.Add(errorPrevio);
-                        reutilizadas++;
-                        continue;
-                    }
-                }
-
-                if (_parser.TryParse(fila, valor, out var registro, out var error))
-                {
-                    registros.Add(registro!);
-                }
-                else
-                {
-                    errores.Add(error!);
-                }
-
-                reparseadas++;
+                    Resultado = SyncOutcome.SinCambios,
+                    UltimaSync = anterior.UltimaSync,
+                    TotalRegistros = anterior.Registros.Count
+                };
             }
 
-            var eliminadas = anterior.ValoresRawPorFila.Keys.Count(f => !valoresNuevos.ContainsKey(f));
+            // --- Paso 2: lectura de las columnas configuradas ---
+            var filas = await _source.LeerFilasAsync(ct).ConfigureAwait(false);
+
+            // --- Paso 3: los valores van tal cual; no hay nada que interpretar ---
+            var registros = filas
+                .OrderBy(kv => kv.Key)
+                .Select(kv => new RegistroDto
+                {
+                    Fila = kv.Key,
+                    Campos = new ParsedFields { Grupos = kv.Value.Campos }
+                })
+                .ToList();
+
             var ahora = DateTimeOffset.UtcNow;
 
             // Filas marcadas como impresas cuyo contenido cambió (o que desaparecieron)
             // dejan de estarlo: la marca ya no describe lo que hay en la hoja ahora.
-            _impresos.Reconciliar(valoresNuevos);
+            _impresos.Reconciliar(filas);
 
             _cache.Reemplazar(new SheetCache.Snapshot(
                 registros,
-                errores,
-                valoresNuevos.ToDictionary(kv => kv.Key, kv => kv.Value),
+                filas.ToDictionary(kv => kv.Key, kv => kv.Value),
                 ahora,
                 modifiedTime ?? anterior.UltimoModifiedTime));
 
-            _logger.LogInformation(
-                "Sync completa: {Total} registros, {Errores} errores de parseo. " +
-                "Filas reparseadas: {Reparseadas}, reutilizadas: {Reutilizadas}, eliminadas: {Eliminadas}.",
-                registros.Count, errores.Count, reparseadas, reutilizadas, eliminadas);
+            _logger.LogInformation("Sync completa: {Total} registros.", registros.Count);
 
             return new SyncResult
             {
                 Resultado = SyncOutcome.Actualizado,
                 UltimaSync = ahora,
-                TotalRegistros = registros.Count,
-                TotalErroresParseo = errores.Count,
-                FilasReparseadas = reparseadas,
-                FilasReutilizadas = reutilizadas
+                TotalRegistros = registros.Count
             };
         }
         catch (OperationCanceledException)
@@ -217,7 +155,6 @@ public sealed class SyncCoordinator : IDisposable
                 Resultado = SyncOutcome.Error,
                 UltimaSync = anterior.UltimaSync,
                 TotalRegistros = anterior.Registros.Count,
-                TotalErroresParseo = anterior.ErroresParseo.Count,
                 Mensaje = ex.Message
             };
         }

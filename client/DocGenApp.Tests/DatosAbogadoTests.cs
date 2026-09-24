@@ -9,14 +9,12 @@ public class DatosAbogadoTests
     private static RegistroDto Registro() => new()
     {
         Fila = 12,
-        ValorCrudo = "644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO",
         Campos = new ParsedFields
         {
             Grupos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["consecutivo"] = "644/2026",
-                ["colegio"] = "TERCER COLEGIADO",
-                ["circuito"] = "DECIMOPRIMER CIRCUITO",
+                ["circuito"] = "Quinto Tribunal Colegiado en Materia Administrativa del Tercer Circuito",
                 ["nombre"] = "JUAN PEREZ LOPEZ"
             }
         }
@@ -120,7 +118,7 @@ public class DatosAbogadoTests
         var vm = new RecordDetailViewModel(Registro());
 
         Assert.Equal("JUAN PEREZ LOPEZ", vm.Titulo);
-        Assert.Equal("644/2026 · TERCER COLEGIADO · DECIMOPRIMER CIRCUITO", vm.Subtitulo);
+        Assert.Equal("644/2026 · Quinto Tribunal Colegiado en Materia Administrativa del Tercer Circuito", vm.Subtitulo);
     }
 
     [Fact]
@@ -132,7 +130,7 @@ public class DatosAbogadoTests
         var vm = new RecordDetailViewModel(registro);
 
         Assert.Equal("644/2026", vm.Titulo);
-        Assert.Equal("TERCER COLEGIADO · DECIMOPRIMER CIRCUITO", vm.Subtitulo);
+        Assert.Equal("Quinto Tribunal Colegiado en Materia Administrativa del Tercer Circuito", vm.Subtitulo);
     }
 
     [Fact]
@@ -141,14 +139,13 @@ public class DatosAbogadoTests
         var registro = new RegistroDto
         {
             Fila = 9,
-            ValorCrudo = "algo raro",
             Campos = new ParsedFields { Grupos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) }
         };
 
         var vm = new RecordDetailViewModel(registro);
 
         Assert.Equal("Fila 9", vm.Titulo);
-        Assert.Equal("algo raro", vm.Subtitulo);
+        Assert.Equal(string.Empty, vm.Subtitulo);
     }
 
     [Fact]
@@ -157,14 +154,11 @@ public class DatosAbogadoTests
         var registro = new RegistroDto
         {
             Fila = 3,
-            ValorCrudo = "777/2026 SEGUNDO TRIBUNAL UNITARIO",
-            PatronUsado = 1,
             Campos = new ParsedFields
             {
                 Grupos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["consecutivo"] = "777/2026",
-                    ["colegio"] = "SEGUNDO TRIBUNAL UNITARIO",
                     ["nombre"] = "MARIA RUIZ"
                 }
             }
@@ -173,7 +167,7 @@ public class DatosAbogadoTests
         var vm = new RecordDetailViewModel(registro);
 
         Assert.Equal("MARIA RUIZ", vm.Titulo);
-        Assert.Equal("777/2026 · SEGUNDO TRIBUNAL UNITARIO", vm.Subtitulo);
+        Assert.Equal("777/2026", vm.Subtitulo);
 
         // Sin circuito el marcador ni siquiera se ofrece: el generador lo deja visible
         // en el documento y lo reporta, en vez de sustituirlo por un hueco en blanco.
@@ -182,10 +176,11 @@ public class DatosAbogadoTests
 
     [Theory]
     [InlineData("juan", true)]      // por el nombre de la columna extra
-    [InlineData("COLEGIADO", true)] // por el valor crudo
+    [InlineData("colegiado", true)] // por el circuito
+    [InlineData("644", true)]       // por el número de amparo
     [InlineData("12", true)]        // por el número de fila
     [InlineData("zzz", false)]
-    public void El_filtro_busca_en_valor_crudo_nombre_y_fila(string termino, bool esperado)
+    public void El_filtro_busca_en_todas_las_columnas_y_en_la_fila(string termino, bool esperado)
     {
         var vm = new RecordDetailViewModel(Registro());
 

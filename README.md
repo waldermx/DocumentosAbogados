@@ -2,7 +2,7 @@
 
 Genera documentos Word a partir de un registro que vive en Google Sheets.
 
-- **`server/DocApi`** — ASP.NET Core Minimal API. Es el único componente que conoce las credenciales de Google. Lee una columna de la hoja, la parsea con un regex configurable y la sirve cacheada. Solo lectura: nunca escribe en Sheets ni genera documentos.
+- **`server/DocApi`** — ASP.NET Core Minimal API. Es el único componente que conoce las credenciales de Google. Lee las columnas configuradas de la hoja, tal cual, y las sirve cacheadas. Solo lectura: nunca escribe en Sheets ni genera documentos.
 - **`client/DocGenApp`** — App de escritorio Avalonia para Windows. Consume la API, muestra los registros y genera el `.docx` **en el equipo del usuario** reemplazando los marcadores de una plantilla.
 
 ```
@@ -20,7 +20,7 @@ El cliente nunca ve credenciales de Google: solo conoce la URL del servidor y la
 
 ```bash
 dotnet build          # compila los 4 proyectos
-dotnet test           # 74 tests
+dotnet test           # 76 tests
 ```
 
 ### Servidor
@@ -53,102 +53,82 @@ Todo se puede sobreescribir con variables de entorno usando doble guion bajo (`A
 | `GoogleSheets:SpreadsheetId` | `GoogleSheets__SpreadsheetId` | Id de la hoja. **Obligatoria** para sincronizar. |
 | `GoogleSheets:ServiceAccountJson` | `GoogleSheets__ServiceAccountJson` | Contenido del JSON de service account (cómodo en Docker). |
 | `GoogleSheets:ServiceAccountJsonPath` | `GoogleSheets__ServiceAccountJsonPath` | Alternativa: ruta al archivo JSON. |
-| `GoogleSheets:Range` | `GoogleSheets__Range` | Rango A1 de la columna principal (la que pasa por el regex). Por defecto `Hoja1!C:C`. |
-| `GoogleSheets:ColumnasExtra` | `GoogleSheets__ColumnasExtra__0__Range` | Columnas adicionales que se copian tal cual. Ver abajo. |
-| `GoogleSheets:TieneEncabezado` | `GoogleSheets__TieneEncabezado` | Si la primera fila del rango es encabezado. Por defecto `true`. |
-| `Parsing:Regexes` | `Parsing__Regexes__0` | Lista de patrones .NET con grupos con nombre. Ver abajo. |
-| `Sync:PollingIntervalMinutes` | `Sync__PollingIntervalMinutes` | Cada cuánto se consulta si la hoja cambió. Por defecto `5`. |
+| `GoogleSheets:Hoja` | `GoogleSheets__Hoja` | Nombre de la pestaña, tal como aparece abajo en Google Sheets. Por defecto `Hoja1`. |
+| `GoogleSheets:Columnas` | `GoogleSheets__Columnas__0__Columna` | Qué columnas se leen y con qué nombre. Ver abajo. |
+| `GoogleSheets:TieneEncabezado` | `GoogleSheets__TieneEncabezado` | Si la primera fila de la hoja es encabezado. Por defecto `true`. |
 | `Sync:CacheFilePath` | `Sync__CacheFilePath` | Dónde persistir el caché. Vacío = solo memoria. |
+| `Sync:ImpresosFilePath` | `Sync__ImpresosFilePath` | Dónde persistir las marcas de impreso. Vacío = solo memoria. |
 
 La service account necesita permiso de **lectura** sobre la hoja: compártela con el email de la service account. Los scopes que se piden son `spreadsheets.readonly` y `drive.readonly`.
 
-### Los regex
+### Las columnas
 
-`Parsing:Regexes` es una **lista**: se prueban en orden contra cada celda y gana el primero que coincida. Por defecto:
-
-```
-1) ^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+?)\s+DEL\s+(?<circuito>.+)$
-2) ^(?:(?!\d)\S+\s+)*(?<consecutivo>\d+/\d{2,4})\s+(?<colegio>.+)$
-3) ^(?<colegio>.+?)\s+(?<consecutivo>\d+/\d{2,4})$
-```
-
-El primero es el formato canónico. Sobre `644/2026 TERCER COLEGIADO DEL DECIMOPRIMER CIRCUITO` extrae:
-
-| Grupo | Valor |
-|---|---|
-| `consecutivo` | `644/2026` |
-| `colegio` | `TERCER COLEGIADO` |
-| `circuito` | `DECIMOPRIMER CIRCUITO` |
-
-Los tres patrones toleran, en cualquier combinación:
-
-- **Año de 2 o 4 dígitos** en el consecutivo (`21` o `2026`) — `\d{2,4}`, no `\d{4}` fijo.
-- **Sin `DEL <circuito>` al final** (patrón 2): no todas las filas lo llevan. Sobre `777/2026 SEGUNDO TRIBUNAL UNITARIO` extrae `consecutivo` = `777/2026` y `colegio` = `SEGUNDO TRIBUNAL UNITARIO`, sin `circuito`. El marcador `{{circuito}}` sin valor se deja visible en el documento y se avisa en la app, como cualquier otro campo faltante.
-- **Una o más palabras antes del consecutivo** (patrones 1 y 2): `REVISIÓN 1/2022 SEXTO COLEGIADO` → `consecutivo` = `1/2022`, `colegio` = `SEXTO COLEGIADO`. La(s) palabra(s) delante no se capturan ni aparecen en ningún marcador.
-- **El consecutivo al final en vez de al principio** (patrón 3, el último recurso): `Primer Colegiado 33/2022` → `colegio` = `Primer Colegiado`, `consecutivo` = `33/2022`.
-
-Cada registro expone `patronUsado` (índice 0-based) para ver de un vistazo qué filas cayeron en cuál. `GET /diagnostico` (ver más abajo) también reporta `filasPorPatron`. Si aparece una variante nueva que ninguno de los tres cubre, se añade un patrón más a la lista, del más específico al más laxo: es configuración, no código.
-
-**Los nombres de los grupos son libres**: cada grupo con nombre se convierte automáticamente en un marcador `{{nombre}}` disponible en la plantilla. Una fila que no coincide con **ningún** patrón sigue sin interrumpir la sincronización: se lista aparte en la app.
-
-También se acepta `Parsing:Regex` en singular (la forma anterior); solo se usa si `Regexes` está vacío.
-
-### Columnas extra
-
-Además de la columna principal, se pueden leer otras columnas de la misma hoja que **no** pasan por el regex: se copian tal cual y se unen a cada registro **por número de fila**.
+Cada columna configurada se copia **tal cual**, sin interpretarla, y queda disponible en la plantilla como `{{Nombre}}`. Por defecto:
 
 ```json
 "GoogleSheets": {
-  "Range": "Hoja1!C:C",
-  "ColumnasExtra": [
-    { "Nombre": "nombre", "Range": "Hoja1!D:D" }
+  "Hoja": "Hoja1",
+  "Columnas": [
+    { "Nombre": "consecutivo", "Columna": "B" },
+    { "Nombre": "nombre", "Columna": "D" },
+    { "Nombre": "circuito", "Columna": "E" }
   ]
 }
 ```
 
-Eso hace que `{{nombre}}` esté disponible en la plantilla con el contenido de la columna D de esa misma fila. Se pueden declarar varias; cada `Nombre` debe ser único (si no, el servidor falla al arrancar con un mensaje explícito).
+| Columna en la hoja | Marcador | Ejemplo |
+|---|---|---|
+| B — Amparo número | `{{consecutivo}}` | `644/2026` |
+| D — Nombre | `{{nombre}}` | `JUAN PEREZ LOPEZ` |
+| E — Circuito | `{{circuito}}` | `Quinto Tribunal Colegiado en Materia Administrativa del Tercer Circuito` |
 
 Detalles que importan:
 
-- **Sigue siendo una sola llamada a Sheets por sync**: la columna principal y las extra se piden juntas con `values.batchGet`.
-- Todos los rangos deben **arrancar en la misma fila** (`C:C` y `D:D`, no `C:C` y `D5:D`), porque la correspondencia es por posición de fila.
-- Una celda extra vacía **no descarta la fila**: el campo queda vacío y el marcador se reporta como faltante.
-- El diff por fila compara la fila entera, así que **editar solo la columna del nombre también reparsea esa fila** (y solo esa).
-- Si una columna extra se llama igual que un grupo del regex, gana la columna extra: es un dato explícito.
+- **Una sola llamada a Sheets por sync**: todas las columnas se piden juntas con `values.batchGet`.
+- Una fila entra en la lista si **cualquiera** de sus columnas tiene algo. Una celda vacía no la descarta: el campo queda vacío y el marcador se reporta como faltante al generar.
+- Cada `Nombre` debe ser único; si no, el servidor falla al arrancar con un mensaje explícito.
+- Por env var, `Columnas` es una **lista**: lleva el índice (`GoogleSheets__Columnas__2__Columna=F`). Definir un índice pisa solo esa posición.
+
+### Cambiar de hoja reinicia los datos
+
+El caché y las marcas de impreso se guardan junto con el **origen** del que salieron: spreadsheet, pestaña y columnas. Si al arrancar el servidor el origen configurado no coincide, lo guardado se descarta y se arranca vacío hasta la primera sincronización. Las marcas se indexan por número de fila, y con otra hoja la fila 5 es otro expediente.
+
+No hace falta borrar el volumen a mano: cambiar `GoogleSheets__SpreadsheetId` (o la pestaña, o las columnas) y redesplegar basta.
 
 ## Endpoints
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | `GET` | `/health` | No | Estado y última sincronización. Para Traefik/Dokploy. |
-| `GET` | `/diagnostico` | Sí | Qué configuración tiene cargada **esta instancia**: patrones activos, columnas extra y cuántas filas cayó en cada patrón. |
-| `GET` | `/registros` | Sí | Registros parseados + errores de parseo + `ultimaSync`. |
+| `GET` | `/diagnostico` | Sí | Qué configuración tiene cargada **esta instancia**: spreadsheet, pestaña y columnas con su rango. |
+| `GET` | `/registros` | Sí | Registros + marcas de impreso + `ultimaSync`. |
 | `GET` | `/registros/{fila}` | Sí | Un registro. |
-| `POST` | `/sync` | Sí | Fuerza un refresco. `?forzar=true` salta el chequeo de cambios y reparsea todo. |
+| `POST` | `/registros/{fila}/impreso` | Sí | Marca la fila como generada/impresa. |
+| `DELETE` | `/registros/{fila}/impreso` | Sí | Quita la marca. |
+| `DELETE` | `/registros/impresos` | Sí | Quita todas las marcas. |
+| `POST` | `/sync` | Sí | Sincroniza con la hoja. `?forzar=true` salta el chequeo de cambios. |
 
-## Cómo se sincroniza (y por qué es barato)
+## Cómo se sincroniza
 
-Cada ciclo de polling y cada `POST /sync` pasan por el mismo coordinador, en tres pasos:
+**Solo a mano**: con el botón «Sincronizar» del cliente (`POST /sync?forzar=true`). El servidor no consulta la hoja por su cuenta, ni siquiera al arrancar; hasta la primera sincronización la lista está vacía.
 
-1. **Chequeo barato** — se pregunta a Drive solo por `modifiedTime` de la hoja. Si no cambió, **se corta ahí**: no se lee la columna ni se reparsea nada.
-2. **Lectura** — solo si la hoja cambió, una única llamada a Sheets (`values.batchGet`) que trae la columna principal y todas las columnas extra a la vez.
-3. **Diff por fila** — cada fila se compara contra la de la sync anterior, **incluidas sus columnas extra**. Solo las filas que cambiaron vuelven a pasar por los regex; el resto conserva su resultado.
+Cada `POST /sync` pasa por el mismo coordinador:
 
-Un `SemaphoreSlim` garantiza que varias solicitudes simultáneas (polling + botón «Actualizar») no disparen varias sincronizaciones: se coalescen en una.
+1. **Chequeo barato** — se pregunta a Drive solo por `modifiedTime` de la hoja. Sin `forzar`, si no cambió, **se corta ahí**.
+2. **Lectura** — una única llamada a Sheets (`values.batchGet`) que trae todas las columnas a la vez.
+3. **Reemplazo** — los valores se copian a los registros y se reemplaza el caché. Una fila marcada como impresa pierde la marca si cualquiera de sus columnas cambió o si desapareció de la hoja.
 
-Los logs reportan `Filas reparseadas` / `reutilizadas` en cada sync, que es la forma de comprobar que el diff funciona.
+Un `SemaphoreSlim` garantiza que varias solicitudes simultáneas no disparen varias lecturas: se coalescen en una.
 
 ## La plantilla Word
 
-`client/DocGenApp/Templates/plantilla.docx` es un **ejemplo**: reemplázalo por la plantilla real. Los marcadores se escriben como `{{nombre}}`:
+`client/DocGenApp/Templates/plantilla.docx` es la plantilla que usa la app. Los marcadores se escriben como `{{nombre}}`:
 
 | Marcador | Contenido |
 |---|---|
-| `{{consecutivo}}`, `{{colegio}}`, `{{circuito}}` | Los grupos del regex (o los que definas) |
-| `{{nombre}}` | La columna extra configurada (o las que definas) |
+| `{{consecutivo}}`, `{{nombre}}`, `{{circuito}}` | Las columnas de la hoja (o las que configures) |
 | `{{abogadoNombre}}`, `{{abogadoFirel}}`, `{{abogadoCedula}}` | El **primer** abogado capturado en la app |
 | `{{abogado1Nombre}}`, `{{abogado2Nombre}}`, ... | Cada abogado capturado, numerado por su posición en la lista — ver [Datos de los abogados](#datos-de-los-abogados) |
-| `{{valorCrudo}}` | El texto original de la celda |
 | `{{fila}}` | Número de fila en la hoja |
 | `{{fecha}}` | Fecha de generación, `dd/MM/yyyy` |
 
@@ -197,7 +177,7 @@ El archivo de una versión anterior a este cambio (`abogado.json`, un único abo
 
 La lista de registros tiene una casilla por fila y una casilla **«Seleccionar todos»** en la cabecera, que marca o desmarca lo que el filtro deja a la vista. El flujo previsto es: filtrar → seleccionar todos → generar.
 
-- El cuadro de filtro busca en el texto original, en la columna de nombre y en el número de fila.
+- El cuadro de filtro busca en todas las columnas (amparo, nombre, circuito) y en el número de fila.
 - «Seleccionar todos» actúa solo sobre lo visible; **«Limpiar» desmarca todo**, también lo que el filtro esconde, para que no queden marcas invisibles que igual se generarían.
 - El botón principal dice cuántos documentos va a generar. Se pide **una carpeta una sola vez** (o se usa `DefaultOutputFolder` si está configurada) y ahí cae un `.docx` por registro.
 - Si dos registros comparten consecutivo, al segundo se le añade `-fila<N>` en vez de sobrescribir al primero en silencio.
@@ -224,6 +204,7 @@ docker build -f server/DocApi/Dockerfile -t docapi .
 docker run -p 8080:8080 \
   -e Auth__MasterPassword="..." \
   -e GoogleSheets__SpreadsheetId="..." \
+  -e GoogleSheets__Hoja="..." \
   -e GoogleSheets__ServiceAccountJson="$(cat service-account.json)" \
   docapi
 ```
@@ -232,20 +213,15 @@ Monta un volumen en `/app/cache` si quieres conservar el caché entre despliegue
 
 ## Si algo no cuadra
 
-### «Una fila que debería matchear sigue en errores de parseo»
+### «La lista sale vacía» o «faltan columnas»
 
-Desde el cliente, «el patrón está mal» y «el servidor desplegado es de antes» se ven idénticos. Para distinguirlos:
+Desde el cliente, «la pestaña o las columnas están mal» y «el servidor desplegado es de antes» se ven idénticos. Para distinguirlos:
 
 ```bash
 curl -H "Authorization: Bearer <password>" https://tu-servidor/diagnostico
 ```
 
-Si `patrones` trae **un solo** patrón, la instancia no tiene la lista: o no se ha redesplegado, o su configuración la está pisando. Con la lista cargada, `filasPorPatron` dice cuántas filas resolvió cada uno.
-
-Dos cosas que pisan la lista silenciosamente:
-
-- **`Parsing__Regex` (singular) como variable de entorno.** Solo se usa si `Regexes` está vacío, y `appsettings.json` ya trae `Regexes`, así que hoy se ignora. Si la tenías puesta en Dokploy, bórrala para no confundirte.
-- **`Parsing__Regexes__0` en el entorno.** Reemplaza el patrón de esa posición. Si defines solo el índice 0, el de respaldo desaparece.
+Muestra el `spreadsheetId`, la `hoja` y cada columna con el rango que se pide a Sheets (`'Hoja1'!B:B`). Si la pestaña no existe, `POST /sync` devuelve 502 con el error de Google. Recuerda que la lista está vacía hasta pulsar «Sincronizar»: el servidor no sincroniza solo.
 
 ### «The Json value could not be converted to System.String. Path: $.resultado»
 
